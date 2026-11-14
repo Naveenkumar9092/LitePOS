@@ -1,0 +1,33 @@
+# .NET build artifacts
+**/bin/
+**/obj/
+**/.vs/
+**/*.user
+**/*.suo
+**/TestResults/
+
+# Flutter / Dart build artifacts
+**/build/
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.pub-cache/
+**/.pub/
+
+# Local databases & logs
+*.localdb
+*.db
+*.db-shm
+*.db-wal
+**/logs/
+**/scratch/
+
+# Distribution build outputs
+dist/**/backend/
+dist/**/*.dll
+dist/**/*.pdb
+
+# Windows desktop temporary build artifacts
+windows/flutter/ephemeral/
+*.msi
+*.exe.manifest
