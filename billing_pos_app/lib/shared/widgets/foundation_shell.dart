@@ -277,12 +277,12 @@ class _FoundationShellState extends ConsumerState<FoundationShell> {
               decoration: BoxDecoration(
                 color: isDark
                     ? const Color(0xFF0F172A).withValues(alpha: 0.90)
-                    : Colors.white.withValues(alpha: 0.90),
+                    : Colors.white.withValues(alpha: 0.95),
                 border: Border(
                   right: BorderSide(
                     color: isDark
                         ? Colors.white.withValues(alpha: 0.10)
-                        : Colors.black.withValues(alpha: 0.07),
+                        : const Color(0xFFCCE4E9),
                     width: 1.2,
                   ),
                 ),

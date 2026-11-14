@@ -12,25 +12,25 @@ class NeonAmbientBackground extends StatelessWidget {
 
     return Stack(
       children: [
-        // Solid background base
+        // Solid background base: #EBF4F6 on light, #0B1416 on dark
         Positioned.fill(
           child: Container(
-            color: isDark ? AppColors.glassCanvasDark : const Color(0xFFF1F5F9),
+            color: isDark ? AppColors.glassCanvasDark : AppColors.backgroundLight,
           ),
         ),
 
-        // Ambient Neon Orb 1 (Top Left - Cyan / Teal)
+        // Ambient Teal Glow Orb 1 (#24B1B1 - Top Left)
         Positioned(
           top: -100,
           left: -80,
           child: Container(
-            width: 400,
-            height: 400,
+            width: 420,
+            height: 420,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  AppColors.neonCyan.withValues(alpha: isDark ? 0.18 : 0.12),
+                  AppColors.primary.withValues(alpha: isDark ? 0.22 : 0.16),
                   Colors.transparent,
                 ],
               ),
@@ -38,7 +38,7 @@ class NeonAmbientBackground extends StatelessWidget {
           ),
         ),
 
-        // Ambient Neon Orb 2 (Top Right - Cyber Violet)
+        // Ambient Teal Glow Orb 2 (Top Right)
         Positioned(
           top: 60,
           right: -100,
@@ -49,7 +49,7 @@ class NeonAmbientBackground extends StatelessWidget {
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  AppColors.neonViolet.withValues(alpha: isDark ? 0.16 : 0.10),
+                  const Color(0xFF24B1B1).withValues(alpha: isDark ? 0.18 : 0.12),
                   Colors.transparent,
                 ],
               ),
@@ -57,7 +57,7 @@ class NeonAmbientBackground extends StatelessWidget {
           ),
         ),
 
-        // Ambient Neon Orb 3 (Bottom Left - Emerald)
+        // Ambient Soft Ice Orb 3 (Bottom Left)
         Positioned(
           bottom: 120,
           left: 100,
@@ -68,7 +68,7 @@ class NeonAmbientBackground extends StatelessWidget {
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  AppColors.neonEmerald.withValues(alpha: isDark ? 0.12 : 0.08),
+                  const Color(0xFF24B1B1).withValues(alpha: isDark ? 0.14 : 0.09),
                   Colors.transparent,
                 ],
               ),
@@ -84,4 +84,3 @@ class NeonAmbientBackground extends StatelessWidget {
     );
   }
 }
-

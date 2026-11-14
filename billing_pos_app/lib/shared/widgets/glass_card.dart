@@ -34,14 +34,14 @@ class GlassCard extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final defaultBg = isDark
-        ? const Color(0xFF1E293B).withValues(alpha: 0.55)
-        : Colors.white.withValues(alpha: 0.85);
+        ? const Color(0xFF132225).withValues(alpha: 0.70)
+        : Colors.white.withValues(alpha: 0.92);
 
     final effectiveBorder = customBorder ??
         Border.all(
           color: isDark
               ? Colors.white.withValues(alpha: 0.12)
-              : Colors.white.withValues(alpha: 0.9),
+              : const Color(0xFFCCE4E9),
           width: 1.2,
         );
 

@@ -42,7 +42,7 @@ class SalesSummaryCards extends StatelessWidget {
                 subtitle: "Per order average",
                 badgeText: "Ticket Size",
                 icon: Icons.analytics_outlined,
-                neonColor: AppColors.neonViolet,
+                neonColor: AppColors.secondary,
               ),
             ),
             SizedBox(
