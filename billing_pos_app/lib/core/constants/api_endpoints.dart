@@ -99,8 +99,12 @@ class ApiEndpoints {
   static const String hardwareOpenDrawer = "/hardware/open-drawer";
   static const String hardwareReceipt = "/hardware/receipt";
 
-  // Notifications
+  // Notifications & Settings
   static const String emailInvoice = "/notifications/email/invoice";
   static const String whatsappInvoice = "/notifications/whatsapp/invoice";
+  static const String notificationLogs = "/notifications/logs";
+  static const String settingsPreferences = "/settings/preferences";
+  static const String settingsBackup = "/settings/backup";
+  static const String settingsSystemInfo = "/settings/system-info";
 }
 
