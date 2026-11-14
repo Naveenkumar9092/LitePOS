@@ -31,3 +31,4 @@ ENV ConnectionStrings__SqliteConnection="Data Source=LitePOS_Cloud.db"
 EXPOSE 8080
 
 ENTRYPOINT ["dotnet", "BillingPOS.Api.dll"]
+

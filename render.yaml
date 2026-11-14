@@ -20,3 +20,4 @@ services:
         value: LitePOS.Api
       - key: JwtSettings__Audience
         value: LitePOS.Client
+
