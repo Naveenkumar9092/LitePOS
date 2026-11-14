@@ -7,6 +7,7 @@ class CartItemModel {
   final double taxPercentage;
   final int quantity;
   final double discountAmount;
+  final String? imageUrl;
 
   CartItemModel({
     required this.productId,
@@ -15,6 +16,7 @@ class CartItemModel {
     this.taxPercentage = 0.0,
     this.quantity = 1,
     this.discountAmount = 0.0,
+    this.imageUrl,
   });
 
   factory CartItemModel.fromProduct(ProductModel product, {int quantity = 1}) {
@@ -25,6 +27,7 @@ class CartItemModel {
       taxPercentage: product.taxPercentage,
       quantity: quantity,
       discountAmount: 0.0,
+      imageUrl: product.productImageStorageKey,
     );
   }
 
@@ -40,6 +43,7 @@ class CartItemModel {
     double? taxPercentage,
     int? quantity,
     double? discountAmount,
+    String? imageUrl,
   }) {
     return CartItemModel(
       productId: productId ?? this.productId,
@@ -48,6 +52,7 @@ class CartItemModel {
       taxPercentage: taxPercentage ?? this.taxPercentage,
       quantity: quantity ?? this.quantity,
       discountAmount: discountAmount ?? this.discountAmount,
+      imageUrl: imageUrl ?? this.imageUrl,
     );
   }
 

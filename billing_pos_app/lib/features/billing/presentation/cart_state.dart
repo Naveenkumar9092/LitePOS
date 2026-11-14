@@ -120,6 +120,10 @@ class CartNotifier extends StateNotifier<CartState> {
     }
   }
 
+  void clearCustomer() {
+    state = state.copyWith(clearCustomer: true);
+  }
+
   void setNote(String? note) {
     state = state.copyWith(note: note);
   }

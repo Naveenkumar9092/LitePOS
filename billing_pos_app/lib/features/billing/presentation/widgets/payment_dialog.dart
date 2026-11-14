@@ -1,4 +1,5 @@
 import "package:flutter/material.dart";
+import "package:google_fonts/google_fonts.dart";
 import "package:billing_pos_app/core/theme/app_colors.dart";
 import "package:billing_pos_app/core/utilities/currency_formatter.dart";
 import "package:billing_pos_app/shared/widgets/app_button.dart";
@@ -69,9 +70,10 @@ class _PaymentDialogState extends State<PaymentDialog> {
     }.where((a) => a >= widget.totalAmount).toList();
 
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      backgroundColor: Colors.white,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
+        constraints: const BoxConstraints(maxWidth: 540),
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
           child: Column(
@@ -81,35 +83,71 @@ class _PaymentDialogState extends State<PaymentDialog> {
               // Header
               Row(
                 children: [
-                  const Icon(Icons.payment, color: AppColors.primary),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text("Payment & Settlement", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.payment_rounded, color: AppColors.primary, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Payment & Settlement",
+                          style: GoogleFonts.dmSans(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+                        ),
+                        Text(
+                          "Pooja Sweets & Cafe Billing Checkout",
+                          style: GoogleFonts.dmSans(fontSize: 11, color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close),
+                    icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
               ),
-              const Divider(height: 24),
+              const Divider(height: 24, color: Color(0xFFE2E8F0)),
 
               // Total Payable Box
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFEBF4F6), Color(0xFFD4EFF1)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFCCE4E9), width: 1.2),
                 ),
                 child: Column(
                   children: [
-                    const Text("TOTAL PAYABLE", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondary, letterSpacing: 1.2)),
+                    Text(
+                      "TOTAL PAYABLE",
+                      style: GoogleFonts.dmSans(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textSecondary,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       CurrencyFormatter.formatINR(widget.totalAmount),
-                      style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.primary),
+                      style: GoogleFonts.dmSans(
+                        fontSize: 30,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.primaryDark,
+                        letterSpacing: -0.5,
+                      ),
                     ),
                   ],
                 ),
@@ -120,15 +158,15 @@ class _PaymentDialogState extends State<PaymentDialog> {
               Row(
                 children: [
                   Expanded(
-                    child: _buildModeTab(1, "Cash", Icons.money),
+                    child: _buildModeTab(1, "Cash", Icons.payments_rounded),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: _buildModeTab(2, "UPI / QR", Icons.qr_code_2),
+                    child: _buildModeTab(2, "UPI / QR", Icons.qr_code_2_rounded),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: _buildModeTab(3, "Card", Icons.credit_card),
+                    child: _buildModeTab(3, "Card", Icons.credit_card_rounded),
                   ),
                 ],
               ),
@@ -136,7 +174,10 @@ class _PaymentDialogState extends State<PaymentDialog> {
 
               // Mode Specific Options
               if (_selectedMode == 1) ...[
-                const Text("Quick Cash Presets", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                Text(
+                  "Quick Cash Presets",
+                  style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
+                ),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -144,9 +185,17 @@ class _PaymentDialogState extends State<PaymentDialog> {
                   children: quickCashOptions.map((amt) {
                     final isSelected = (_receivedAmount - amt).abs() < 0.01;
                     return ActionChip(
-                      label: Text(amt == widget.totalAmount ? "Exact (${CurrencyFormatter.formatINR(amt)})" : CurrencyFormatter.formatINR(amt)),
-                      backgroundColor: isSelected ? AppColors.primary.withValues(alpha: 0.15) : null,
-                      side: BorderSide(color: isSelected ? AppColors.primary : Colors.grey.shade300),
+                      label: Text(
+                        amt == widget.totalAmount ? "Exact (${CurrencyFormatter.formatINR(amt)})" : CurrencyFormatter.formatINR(amt),
+                        style: GoogleFonts.dmSans(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          color: isSelected ? Colors.white : AppColors.textPrimary,
+                        ),
+                      ),
+                      backgroundColor: isSelected ? AppColors.primary : const Color(0xFFF1F5F9),
+                      side: BorderSide(color: isSelected ? AppColors.primary : const Color(0xFFCBD5E1)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       onPressed: () => _setPresetAmount(amt),
                     );
                   }).toList(),
@@ -159,34 +208,51 @@ class _PaymentDialogState extends State<PaymentDialog> {
                     Expanded(
                       child: TextField(
                         controller: _amountController,
+                        style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.bold),
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: "Cash Tendered",
+                          labelStyle: GoogleFonts.dmSans(),
                           prefixText: "₹ ",
-                          border: OutlineInputBorder(),
+                          prefixStyle: GoogleFonts.dmSans(fontWeight: FontWeight.bold),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                          ),
                         ),
                         onChanged: _onAmountChanged,
                       ),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 14),
                     Expanded(
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         decoration: BoxDecoration(
-                          color: _changeDue > 0 ? AppColors.successContainer.withValues(alpha: 0.3) : Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: _changeDue > 0 ? AppColors.success : Colors.grey.shade300),
+                          color: _changeDue > 0 ? const Color(0xFFD1FAE5) : const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: _changeDue > 0 ? AppColors.success : const Color(0xFFE2E8F0),
+                            width: _changeDue > 0 ? 1.5 : 1.0,
+                          ),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text("Change Due", style: TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+                            Text(
+                              "Change Due",
+                              style: GoogleFonts.dmSans(
+                                fontSize: 11,
+                                color: _changeDue > 0 ? AppColors.success : AppColors.textSecondary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                             const SizedBox(height: 2),
                             Text(
                               CurrencyFormatter.formatINR(_changeDue),
-                              style: TextStyle(
+                              style: GoogleFonts.dmSans(
                                 fontSize: 18,
-                                fontWeight: FontWeight.bold,
+                                fontWeight: FontWeight.w900,
                                 color: _changeDue > 0 ? AppColors.success : AppColors.textPrimary,
                               ),
                             ),
@@ -196,14 +262,102 @@ class _PaymentDialogState extends State<PaymentDialog> {
                     ),
                   ],
                 ),
-              ] else ...[
+              ] else if (_selectedMode == 2) ...[
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFCBD5E1)),
+                        ),
+                        child: const Icon(Icons.qr_code_2_rounded, size: 48, color: AppColors.primary),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text("Customer Dynamic QR Code", style: GoogleFonts.dmSans(fontWeight: FontWeight.bold, fontSize: 13)),
+                            const SizedBox(height: 2),
+                            Text(
+                              "Ask customer to scan using GPay, PhonePe, Paytm or BHIM UPI.",
+                              style: GoogleFonts.dmSans(fontSize: 11, color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
                 TextField(
                   controller: _refController,
+                  style: GoogleFonts.dmSans(),
                   decoration: InputDecoration(
-                    labelText: _selectedMode == 2 ? "UPI Reference / UTR Number (Optional)" : "Card Authorization Code (Optional)",
+                    labelText: "UPI Reference / UTR Number (Optional)",
+                    labelStyle: GoogleFonts.dmSans(),
                     hintText: "e.g. 123456789012",
-                    prefixIcon: Icon(_selectedMode == 2 ? Icons.receipt_long : Icons.pin),
-                    border: const OutlineInputBorder(),
+                    hintStyle: GoogleFonts.dmSans(color: Colors.grey),
+                    prefixIcon: const Icon(Icons.receipt_long_rounded, color: AppColors.primary),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ] else ...[
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFCBD5E1)),
+                        ),
+                        child: const Icon(Icons.credit_card_rounded, size: 48, color: AppColors.primary),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text("Card Swipe / Tap Terminal", style: GoogleFonts.dmSans(fontWeight: FontWeight.bold, fontSize: 13)),
+                            const SizedBox(height: 2),
+                            Text(
+                              "Process Visa, MasterCard, RuPay on counter EDC terminal.",
+                              style: GoogleFonts.dmSans(fontSize: 11, color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _refController,
+                  style: GoogleFonts.dmSans(),
+                  decoration: InputDecoration(
+                    labelText: "Card Authorization Code (Optional)",
+                    labelStyle: GoogleFonts.dmSans(),
+                    hintText: "e.g. 123456",
+                    hintStyle: GoogleFonts.dmSans(color: Colors.grey),
+                    prefixIcon: const Icon(Icons.pin_rounded, color: AppColors.primary),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                 ),
               ],
@@ -216,8 +370,12 @@ class _PaymentDialogState extends State<PaymentDialog> {
                 alignment: WrapAlignment.end,
                 children: [
                   OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
                     onPressed: () => Navigator.of(context).pop(),
-                    child: const Text("Cancel"),
+                    child: Text("Cancel", style: GoogleFonts.dmSans(fontWeight: FontWeight.bold)),
                   ),
                   AppButton(
                     text: "Complete & Print Invoice",
@@ -251,23 +409,40 @@ class _PaymentDialogState extends State<PaymentDialog> {
           }
         });
       },
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(10),
+          gradient: isSelected
+              ? const LinearGradient(
+                  colors: [AppColors.primary, AppColors.primaryDark],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : null,
+          color: isSelected ? null : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? AppColors.primary : Colors.grey.shade300,
+            color: isSelected ? AppColors.primary : const Color(0xFFCBD5E1),
+            width: isSelected ? 1.5 : 1.0,
           ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
         ),
         child: Column(
           children: [
-            Icon(icon, color: isSelected ? Colors.white : AppColors.textPrimary),
-            const SizedBox(height: 4),
+            Icon(icon, color: isSelected ? Colors.white : AppColors.textPrimary, size: 22),
+            const SizedBox(height: 5),
             Text(
               label,
-              style: TextStyle(
+              style: GoogleFonts.dmSans(
                 fontWeight: FontWeight.bold,
                 fontSize: 13,
                 color: isSelected ? Colors.white : AppColors.textPrimary,

@@ -190,3 +190,4 @@ class _DualRingPainter extends CustomPainter {
         oldDelegate.primaryColor != primaryColor;
   }
 }
+
