@@ -1,3 +1,4 @@
+import "dart:async";
 import "package:sqflite/sqflite.dart";
 import "../../../core/constants/api_endpoints.dart";
 import "../../../core/database/app_database.dart";
@@ -54,10 +55,8 @@ class ProductRepository {
         final items = rawItems.map((e) => ProductModel.fromJson(e as Map<String, dynamic>)).toList();
         final totalCount = (data["totalCount"] as num?)?.toInt() ?? items.length;
 
-        // Cache products locally
-        for (final p in items) {
-          await _cacheProduct(p);
-        }
+        // Cache products locally in background without blocking UI
+        unawaited(_cacheProductsBatch(items));
 
         return PagedProductsResult(
           items: items,
@@ -178,9 +177,7 @@ class ProductRepository {
       if (response.success && response.data != null) {
         final list = response.data as List<dynamic>;
         final items = list.map((e) => CategoryModel.fromJson(e as Map<String, dynamic>)).toList();
-        for (final cat in items) {
-          await _cacheCategory(cat);
-        }
+        unawaited(_cacheCategoriesBatch(items));
         return items;
       }
     } catch (_) {
@@ -247,23 +244,42 @@ class ProductRepository {
     }
   }
 
+  Future<void> _cacheProductsBatch(List<ProductModel> products) async {
+    try {
+      final db = await _db.database;
+      final batch = db.batch();
+      for (final p in products) {
+        batch.insert(
+          DatabaseTables.localProduct,
+          p.toSqlite(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      await batch.commit(noResult: true);
+    } catch (_) {}
+  }
+
+  Future<void> _cacheCategoriesBatch(List<CategoryModel> categories) async {
+    try {
+      final db = await _db.database;
+      final batch = db.batch();
+      for (final cat in categories) {
+        batch.insert(
+          DatabaseTables.localCategory,
+          cat.toSqlite(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      await batch.commit(noResult: true);
+    } catch (_) {}
+  }
+
   Future<void> _cacheProduct(ProductModel product) async {
     try {
       final db = await _db.database;
       await db.insert(
         DatabaseTables.localProduct,
         product.toSqlite(),
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-    } catch (_) {}
-  }
-
-  Future<void> _cacheCategory(CategoryModel category) async {
-    try {
-      final db = await _db.database;
-      await db.insert(
-        DatabaseTables.localCategory,
-        category.toSqlite(),
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
     } catch (_) {}

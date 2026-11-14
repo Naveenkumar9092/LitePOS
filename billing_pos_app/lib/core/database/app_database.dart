@@ -9,31 +9,49 @@ class AppDatabase {
   static const int _databaseVersion = 1;
 
   Database? _database;
+  Future<Database>? _initFuture;
 
   Future<Database> get database async {
     if (_database != null && _database!.isOpen) {
       return _database!;
     }
-    _database = await _initDatabase();
-    return _database!;
+    _initFuture ??= _initDatabase();
+    try {
+      _database = await _initFuture;
+      return _database!;
+    } catch (_) {
+      _initFuture = null;
+      rethrow;
+    }
   }
 
   Future<Database> _initDatabase() async {
     if (kIsWeb) {
+      databaseFactory = databaseFactoryFfiWebNoWebWorker;
       try {
-        databaseFactory = databaseFactoryFfiWeb;
-        return await databaseFactoryFfiWeb.openDatabase(
-          _databaseName,
-          options: OpenDatabaseOptions(
-            version: _databaseVersion,
-            onCreate: _onCreate,
-            onUpgrade: _onUpgrade,
-          ),
-        );
+        return await databaseFactoryFfiWebNoWebWorker
+            .openDatabase(
+              _databaseName,
+              options: OpenDatabaseOptions(
+                version: _databaseVersion,
+                onCreate: _onCreate,
+                onUpgrade: _onUpgrade,
+              ),
+            )
+            .timeout(
+              const Duration(milliseconds: 1500),
+              onTimeout: () => databaseFactoryFfiWebNoWebWorker.openDatabase(
+                inMemoryDatabasePath,
+                options: OpenDatabaseOptions(
+                  version: _databaseVersion,
+                  onCreate: _onCreate,
+                  onUpgrade: _onUpgrade,
+                ),
+              ),
+            );
       } catch (_) {
-        databaseFactory = databaseFactoryFfiWebNoWebWorker;
         return await databaseFactoryFfiWebNoWebWorker.openDatabase(
-          _databaseName,
+          inMemoryDatabasePath,
           options: OpenDatabaseOptions(
             version: _databaseVersion,
             onCreate: _onCreate,
@@ -96,8 +114,10 @@ class AppDatabase {
   }
 
   Future<void> close() async {
+    _initFuture = null;
     if (_database != null && _database!.isOpen) {
       await _database!.close();
+      _database = null;
     }
   }
 }

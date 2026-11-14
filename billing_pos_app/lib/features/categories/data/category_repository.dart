@@ -1,3 +1,4 @@
+import "dart:async";
 import "package:sqflite/sqflite.dart";
 import "../../../core/constants/api_endpoints.dart";
 import "../../../core/database/app_database.dart";
@@ -25,10 +26,8 @@ class CategoryRepository {
         final list = response.data as List<dynamic>;
         final categories = list.map((e) => CategoryModel.fromJson(e as Map<String, dynamic>)).toList();
 
-        // Cache categories locally
-        for (final c in categories) {
-          await _cacheCategory(c);
-        }
+        // Cache categories locally in background without blocking UI
+        unawaited(_cacheCategoriesBatch(categories));
 
         return categories;
       }
@@ -180,31 +179,49 @@ class CategoryRepository {
     }
   }
 
+  Future<void> _cacheCategoriesBatch(List<CategoryModel> categories) async {
+    try {
+      final db = await _db.database;
+      final batch = db.batch();
+      for (final c in categories) {
+        batch.insert(
+          DatabaseTables.localCategory,
+          c.toLocalDbMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      await batch.commit(noResult: true);
+    } catch (_) {}
+  }
+
   Future<void> _cacheCategory(CategoryModel c) async {
-    final db = await _db.database;
-    await db.insert(
-      DatabaseTables.localCategory,
-      c.toLocalDbMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    try {
+      final db = await _db.database;
+      await db.insert(
+        DatabaseTables.localCategory,
+        c.toLocalDbMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    } catch (_) {}
   }
 
   Future<List<CategoryModel>> _getLocalCategories(bool? isActive) async {
-    final db = await _db.database;
-    String? whereClause;
-    List<dynamic>? whereArgs;
+    try {
+      final db = await _db.database;
+      String? whereClause;
+      List<dynamic>? whereArgs;
 
-    if (isActive != null) {
-      whereClause = "IsActive = ?";
-      whereArgs = [isActive ? 1 : 0];
-    }
+      if (isActive != null) {
+        whereClause = "IsActive = ?";
+        whereArgs = [isActive ? 1 : 0];
+      }
 
-    final results = await db.query(
-      DatabaseTables.localCategory,
-      where: whereClause,
-      whereArgs: whereArgs,
-      orderBy: "DisplayOrder ASC, CategoryName ASC",
-    );
+      final results = await db.query(
+        DatabaseTables.localCategory,
+        where: whereClause,
+        whereArgs: whereArgs,
+        orderBy: "DisplayOrder ASC, CategoryName ASC",
+      );
 
     // Also get product counts from local product table if possible
     final productCounts = <int, int>{};
@@ -225,6 +242,9 @@ class CategoryRepository {
               productCount: productCounts[(e["CategoryId"] as num).toInt()] ?? 0,
             ))
         .toList();
+    } catch (_) {
+      return [];
+    }
   }
 }
 

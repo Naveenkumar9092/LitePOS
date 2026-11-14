@@ -34,24 +34,9 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
   final ScrollController _categoryNavScrollController = ScrollController();
   final ScrollController _categoryBarScrollController = ScrollController();
   int? _selectedCategoryId;
-  late Timer _clockTimer;
-  DateTime _currentTime = DateTime.now();
-
-  @override
-  void initState() {
-    super.initState();
-    _clockTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) {
-        setState(() {
-          _currentTime = DateTime.now();
-        });
-      }
-    });
-  }
 
   @override
   void dispose() {
-    _clockTimer.cancel();
     _searchController.dispose();
     _productsScrollController.dispose();
     _cartScrollController.dispose();
@@ -422,8 +407,6 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
 
   Widget _buildHeader(AuthState authState, BillingState billingState) {
     final cashierName = authState.user?.fullName ?? "Cashier";
-    final timeStr = DateFormat("hh:mm:ss a").format(_currentTime);
-    final dateStr = DateFormat("EEE, dd MMM yyyy").format(_currentTime);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -435,10 +418,7 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
       ),
       child: SafeArea(
         bottom: false,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          physics: const BouncingScrollPhysics(),
-          child: Row(
+        child: Row(
           children: [
             // Store Logo & Terminal Identifier
             Container(
@@ -461,57 +441,64 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
               child: const Icon(Icons.point_of_sale_rounded, color: Colors.white, size: 22),
             ),
             const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      "Pooja Sweets & Cafe",
-                      style: GoogleFonts.dmSans(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                        color: AppColors.textPrimary,
-                        letterSpacing: -0.3,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.successContainer,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.success),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          "Pooja Sweets & Cafe",
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.dmSans(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                            color: AppColors.textPrimary,
+                            letterSpacing: -0.3,
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            "LIVE SYNC",
-                            style: GoogleFonts.dmSans(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.success,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.successContainer,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.success),
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 4),
+                            Text(
+                              "LIVE SYNC",
+                              style: GoogleFonts.dmSans(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.success,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                Text(
-                  "Main Store • Terminal DEV-POS-01",
-                  style: GoogleFonts.dmSans(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
-                ),
-              ],
+                    ],
+                  ),
+                  Text(
+                    "Main Store • Terminal DEV-POS-01",
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.dmSans(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
             ),
-            const Spacer(),
+            const SizedBox(width: 12),
 
             // Cashier Badge
             Container(
@@ -522,6 +509,7 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
                 border: Border.all(color: const Color(0xFFCCE4E9)),
               ),
               child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   CircleAvatar(
                     radius: 11,
@@ -541,33 +529,8 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
             ),
             const SizedBox(width: 12),
 
-            // Live Digital Clock Pill
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    timeStr,
-                    style: GoogleFonts.dmSans(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 12,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  Text(
-                    dateStr,
-                    style: GoogleFonts.dmSans(fontSize: 9, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-            ),
+            // Live Digital Clock Pill (self-contained isolated widget)
+            const _LiveClockBadge(),
             const SizedBox(width: 12),
 
             // Held Bills Button with Badge
@@ -592,7 +555,6 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
               ),
             ),
           ],
-        ),
         ),
       ),
     );
@@ -1613,6 +1575,74 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
       color: const Color(0xFFE2E8F0),
       child: const Center(
         child: Icon(Icons.fastfood_rounded, size: 24, color: AppColors.primary),
+      ),
+    );
+  }
+}
+
+class _LiveClockBadge extends StatefulWidget {
+  const _LiveClockBadge();
+
+  @override
+  State<_LiveClockBadge> createState() => _LiveClockBadgeState();
+}
+
+class _LiveClockBadgeState extends State<_LiveClockBadge> {
+  late Timer _timer;
+  late DateTime _now;
+
+  @override
+  void initState() {
+    super.initState();
+    _now = DateTime.now();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {
+        setState(() {
+          _now = DateTime.now();
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final timeStr = DateFormat("hh:mm:ss a").format(_now);
+    final dateStr = DateFormat("EEE, dd MMM yyyy").format(_now);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(
+            timeStr,
+            style: GoogleFonts.dmSans(
+              fontWeight: FontWeight.w800,
+              fontSize: 12,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          Text(
+            dateStr,
+            style: GoogleFonts.dmSans(
+              fontSize: 9,
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }

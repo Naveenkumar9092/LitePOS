@@ -2,6 +2,7 @@ import "dart:ui";
 import "package:flutter/foundation.dart";
 import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
+import "package:google_fonts/google_fonts.dart";
 import "package:sqflite_common_ffi/sqflite_ffi.dart";
 import "package:sqflite_common_ffi_web/sqflite_ffi_web.dart";
 import "core/constants/app_constants.dart";
@@ -29,7 +30,7 @@ class AppScrollBehavior extends MaterialScrollBehavior {
 
 void _initDatabaseFactory() {
   if (kIsWeb) {
-    databaseFactory = databaseFactoryFfiWeb;
+    databaseFactory = databaseFactoryFfiWebNoWebWorker;
   } else if (defaultTargetPlatform == TargetPlatform.windows ||
       defaultTargetPlatform == TargetPlatform.linux ||
       defaultTargetPlatform == TargetPlatform.macOS) {
@@ -40,6 +41,7 @@ void _initDatabaseFactory() {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  GoogleFonts.config.allowRuntimeFetching = true;
   _initDatabaseFactory();
   final storageService = await StorageService.create();
 

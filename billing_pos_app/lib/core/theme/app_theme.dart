@@ -4,8 +4,7 @@ import "app_colors.dart";
 import "app_typography.dart";
 
 class AppTheme {
-  static ThemeData get lightTheme {
-    return ThemeData(
+  static final ThemeData lightTheme = ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
       colorScheme: const ColorScheme.light(
@@ -129,10 +128,8 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
       ),
     );
-  }
 
-  static ThemeData get darkTheme {
-    return ThemeData(
+  static final ThemeData darkTheme = ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
       colorScheme: const ColorScheme.dark(
@@ -206,6 +203,5 @@ class AppTheme {
         }),
       ),
     );
-  }
 }
 

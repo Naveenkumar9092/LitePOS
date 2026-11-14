@@ -1,3 +1,4 @@
+import "dart:async";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:sqflite/sqflite.dart";
 import "package:billing_pos_app/core/constants/api_endpoints.dart";
@@ -38,7 +39,7 @@ class CustomerRepository {
 
       if (response.success && response.data != null) {
         final paged = PagedCustomersResponse.fromJson(response.data as Map<String, dynamic>);
-        await _cacheCustomersLocally(paged.items);
+        unawaited(_cacheCustomersLocally(paged.items));
         return ApiResponse<PagedCustomersResponse>(
           success: true,
           message: response.message,
@@ -290,68 +291,86 @@ class CustomerRepository {
   // --- SQLite Helpers ---
 
   Future<void> _cacheCustomersLocally(List<CustomerModel> list) async {
-    final db = await _db.database;
-    final batch = db.batch();
-    for (final c in list) {
-      batch.insert(
-        DatabaseTables.localCustomer,
-        c.toSqlite(),
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-    }
-    await batch.commit(noResult: true);
+    try {
+      final db = await _db.database;
+      final batch = db.batch();
+      for (final c in list) {
+        batch.insert(
+          DatabaseTables.localCustomer,
+          c.toSqlite(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      await batch.commit(noResult: true);
+    } catch (_) {}
   }
 
   Future<void> _cacheSingleCustomerLocally(CustomerModel customer) async {
-    final db = await _db.database;
-    await db.insert(
-      DatabaseTables.localCustomer,
-      customer.toSqlite(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    try {
+      final db = await _db.database;
+      await db.insert(
+        DatabaseTables.localCustomer,
+        customer.toSqlite(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    } catch (_) {}
   }
 
   Future<ApiResponse<PagedCustomersResponse>> _loadLocalCustomers({String? search, int page = 1, int size = 20}) async {
-    final db = await _db.database;
-    String? where;
-    List<dynamic>? args;
+    try {
+      final db = await _db.database;
+      String? where;
+      List<dynamic>? args;
 
-    if (search != null && search.trim().isNotEmpty) {
-      final q = "%${search.trim()}%";
-      where = "CustomerName LIKE ? OR MobileNumber LIKE ?";
-      args = [q, q];
+      if (search != null && search.trim().isNotEmpty) {
+        final q = "%${search.trim()}%";
+        where = "CustomerName LIKE ? OR MobileNumber LIKE ?";
+        args = [q, q];
+      }
+
+      final total = Sqflite.firstIntValue(
+        await db.rawQuery(
+          "SELECT COUNT(*) FROM ${DatabaseTables.localCustomer} ${where != null ? 'WHERE $where' : ''}",
+          args,
+        ),
+      ) ?? 0;
+
+      final rows = await db.query(
+        DatabaseTables.localCustomer,
+        where: where,
+        whereArgs: args,
+        limit: size,
+        offset: (page - 1) * size,
+        orderBy: "CustomerId DESC",
+      );
+
+      final list = rows.map(CustomerModel.fromSqlite).toList();
+      final totalPages = (total / size).ceil();
+
+      return ApiResponse<PagedCustomersResponse>(
+        success: true,
+        message: "Offline customers loaded.",
+        data: PagedCustomersResponse(
+          items: list,
+          totalCount: total,
+          pageNumber: page,
+          pageSize: size,
+          totalPages: totalPages < 1 ? 1 : totalPages,
+        ),
+      );
+    } catch (_) {
+      return ApiResponse<PagedCustomersResponse>(
+        success: true,
+        message: "Offline fallback (empty).",
+        data: PagedCustomersResponse(
+          items: const [],
+          totalCount: 0,
+          pageNumber: page,
+          pageSize: size,
+          totalPages: 1,
+        ),
+      );
     }
-
-    final total = Sqflite.firstIntValue(
-      await db.rawQuery(
-        "SELECT COUNT(*) FROM ${DatabaseTables.localCustomer} ${where != null ? 'WHERE $where' : ''}",
-        args,
-      ),
-    ) ?? 0;
-
-    final rows = await db.query(
-      DatabaseTables.localCustomer,
-      where: where,
-      whereArgs: args,
-      limit: size,
-      offset: (page - 1) * size,
-      orderBy: "CustomerId DESC",
-    );
-
-    final list = rows.map(CustomerModel.fromSqlite).toList();
-    final totalPages = (total / size).ceil();
-
-    return ApiResponse<PagedCustomersResponse>(
-      success: true,
-      message: "Offline customers loaded.",
-      data: PagedCustomersResponse(
-        items: list,
-        totalCount: total,
-        pageNumber: page,
-        pageSize: size,
-        totalPages: totalPages < 1 ? 1 : totalPages,
-      ),
-    );
   }
 }
 
