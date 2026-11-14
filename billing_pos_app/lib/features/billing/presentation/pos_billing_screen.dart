@@ -853,15 +853,21 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
                     )
                   : LayoutBuilder(
                       builder: (context, constraints) {
-                        // Calculate optimal columns: 3 or 4 depending on width
-                        final crossAxisCount = constraints.maxWidth > 950 ? 4 : (constraints.maxWidth > 650 ? 3 : 2);
+                        // Responsive cross-axis count & compact aspect ratio to avoid oversized cards
+                        final crossAxisCount = constraints.maxWidth > 1150
+                            ? 5
+                            : (constraints.maxWidth > 850
+                                ? 4
+                                : (constraints.maxWidth > 580 ? 3 : 2));
+                        // Compact card aspect ratio: 1.25 gives ergonomic ~145-165px height (not tall)
+                        final childAspectRatio = constraints.maxWidth > 850 ? 1.26 : 1.22;
                         return GridView.builder(
-                          padding: const EdgeInsets.all(14),
+                          padding: const EdgeInsets.all(12),
                           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: crossAxisCount,
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 12,
-                            childAspectRatio: 0.82,
+                            crossAxisSpacing: 10,
+                            mainAxisSpacing: 10,
+                            childAspectRatio: childAspectRatio,
                           ),
                           itemCount: products.length,
                           itemBuilder: (context, index) {
@@ -883,27 +889,27 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: qtyInCart > 0
               ? AppColors.primary
               : (isAvailable ? const Color(0xFFE2E8F0) : const Color(0xFFFEE2E2)),
-          width: qtyInCart > 0 ? 2.0 : 1.2,
+          width: qtyInCart > 0 ? 2.0 : 1.0,
         ),
         boxShadow: [
           BoxShadow(
             color: qtyInCart > 0
                 ? AppColors.primary.withValues(alpha: 0.15)
                 : Colors.black.withValues(alpha: 0.04),
-            blurRadius: qtyInCart > 0 ? 12 : 8,
-            offset: const Offset(0, 3),
+            blurRadius: qtyInCart > 0 ? 10 : 6,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           onTap: isAvailable
               ? () {
                   ref.read(cartNotifierProvider.notifier).addToCart(product);
@@ -912,13 +918,13 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Hero Product Image
+              // Hero Product Image (Compact flex 6)
               Expanded(
-                flex: 12,
+                flex: 6,
                 child: Stack(
                   children: [
                     ClipRRect(
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
                       child: SizedBox(
                         width: double.infinity,
                         height: double.infinity,
@@ -930,7 +936,7 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
                     Positioned.fill(
                       child: Container(
                         decoration: BoxDecoration(
-                          borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.center,
@@ -945,21 +951,21 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
 
                     // Category Pill on Top-Left
                     Positioned(
-                      top: 8,
-                      left: 8,
+                      top: 6,
+                      left: 6,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.65),
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(5),
                         ),
                         child: Text(
                           product.categoryName.toUpperCase(),
                           style: GoogleFonts.dmSans(
-                            fontSize: 9,
+                            fontSize: 8.5,
                             fontWeight: FontWeight.w800,
                             color: Colors.white,
-                            letterSpacing: 0.5,
+                            letterSpacing: 0.3,
                           ),
                         ),
                       ),
@@ -967,19 +973,19 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
 
                     // Cart Quantity Badge or Out of Stock Badge on Top-Right
                     Positioned(
-                      top: 8,
-                      right: 8,
+                      top: 6,
+                      right: 6,
                       child: !isAvailable
                           ? Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
                                 color: AppColors.error,
-                                borderRadius: BorderRadius.circular(6),
+                                borderRadius: BorderRadius.circular(5),
                               ),
                               child: Text(
                                 "OUT",
                                 style: GoogleFonts.dmSans(
-                                  fontSize: 9,
+                                  fontSize: 8.5,
                                   fontWeight: FontWeight.w900,
                                   color: Colors.white,
                                 ),
@@ -987,26 +993,26 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
                             )
                           : qtyInCart > 0
                               ? Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                                   decoration: BoxDecoration(
                                     color: AppColors.primary,
-                                    borderRadius: BorderRadius.circular(12),
+                                    borderRadius: BorderRadius.circular(10),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: AppColors.primary.withValues(alpha: 0.6),
-                                        blurRadius: 6,
+                                        color: AppColors.primary.withValues(alpha: 0.5),
+                                        blurRadius: 4,
                                       ),
                                     ],
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      const Icon(Icons.check, size: 11, color: Colors.white),
-                                      const SizedBox(width: 3),
+                                      const Icon(Icons.check, size: 10, color: Colors.white),
+                                      const SizedBox(width: 2),
                                       Text(
-                                        "$qtyInCart in cart",
+                                        "$qtyInCart",
                                         style: GoogleFonts.dmSans(
-                                          fontSize: 10,
+                                          fontSize: 9.5,
                                           fontWeight: FontWeight.w800,
                                           color: Colors.white,
                                         ),
@@ -1020,63 +1026,56 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
                 ),
               ),
 
-              // Product Info & Price
+              // Product Info & Price (Compact flex 5)
               Expanded(
-                flex: 9,
+                flex: 5,
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            product.productName,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.dmSans(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13,
-                              color: isAvailable ? AppColors.textPrimary : Colors.grey.shade500,
-                              height: 1.2,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            "HSN: ${product.hsnCode}",
-                            style: GoogleFonts.dmSans(
-                              fontSize: 10,
-                              color: const Color(0xFF94A3B8),
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
+                      Text(
+                        product.productName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.dmSans(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12.5,
+                          color: isAvailable ? AppColors.textPrimary : Colors.grey.shade500,
+                        ),
                       ),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.end,
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
                             children: [
                               Text(
                                 CurrencyFormatter.formatINR(product.sellingPrice),
                                 style: GoogleFonts.dmSans(
                                   fontWeight: FontWeight.w900,
-                                  fontSize: 16,
+                                  fontSize: 14.5,
                                   color: isAvailable ? AppColors.primaryDark : Colors.grey.shade500,
                                 ),
                               ),
+                              const SizedBox(width: 3),
                               Text(
-                                "+${product.taxPercentage.toInt()}% GST",
-                                style: GoogleFonts.dmSans(fontSize: 9, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
+                                "+5%",
+                                style: GoogleFonts.dmSans(
+                                  fontSize: 8.5,
+                                  color: AppColors.textSecondary,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ],
                           ),
                           Container(
-                            padding: const EdgeInsets.all(6),
+                            width: 26,
+                            height: 26,
                             decoration: BoxDecoration(
                               gradient: isAvailable
                                   ? const LinearGradient(
@@ -1084,7 +1083,7 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
                                     )
                                   : null,
                               color: isAvailable ? null : Colors.grey.shade300,
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(7),
                             ),
                             child: const Icon(Icons.add_rounded, color: Colors.white, size: 16),
                           ),
