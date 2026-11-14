@@ -97,7 +97,7 @@ try
     var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
-    if (dbContext.Database.IsSqlServer() || dbContext.Database.IsSqlite())
+    if (dbContext.Database.IsSqlServer() || dbContext.Database.IsSqlite() || dbContext.Database.IsNpgsql())
     {
         await dbContext.Database.EnsureCreatedAsync();
         var shouldSeed = !app.Environment.IsProduction() || builder.Configuration.GetValue<bool>("SeedDatabaseOnStartup", true);
