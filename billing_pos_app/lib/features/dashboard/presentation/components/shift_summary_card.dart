@@ -1,8 +1,9 @@
 import "package:flutter/material.dart";
+import "package:google_fonts/google_fonts.dart";
 import "package:billing_pos_app/core/theme/app_colors.dart";
 import "package:billing_pos_app/core/utilities/currency_formatter.dart";
-import "package:billing_pos_app/shared/widgets/app_card.dart";
 import "package:billing_pos_app/features/dashboard/models/dashboard_models.dart";
+import "package:billing_pos_app/shared/widgets/glass_card.dart";
 
 class ShiftSummaryCard extends StatelessWidget {
   final ShiftSummaryModel shift;
@@ -11,97 +12,174 @@ class ShiftSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return GlassCard(
+      borderRadius: 18,
+      glowColor: AppColors.neonEmerald,
+      glowOpacity: isDark ? 0.12 : 0.05,
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                "Cash Drawer & Shift Summary",
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
+              Row(
+                children: [
+                  Container(
+                    width: 4,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      color: AppColors.neonEmerald,
+                      borderRadius: BorderRadius.circular(4),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.neonEmerald.withValues(alpha: 0.6),
+                          blurRadius: 8,
+                        ),
+                      ],
                     ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    "Cash Drawer & Shift Summary",
+                    style: GoogleFonts.dmSans(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : AppColors.textPrimary,
+                    ),
+                  ),
+                ],
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.12),
+                  color: AppColors.neonEmerald.withValues(alpha: isDark ? 0.20 : 0.12),
                   borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Text(
-                  "ACTIVE SHIFT",
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green,
+                  border: Border.all(
+                    color: AppColors.neonEmerald.withValues(alpha: 0.4),
                   ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 5,
+                      height: 5,
+                      decoration: const BoxDecoration(
+                        color: AppColors.neonEmerald,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      "ACTIVE SHIFT",
+                      style: GoogleFonts.dmSans(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.neonEmerald,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
           Row(
             children: [
               Expanded(
                 child: _buildDrawerTile(
+                  context: context,
                   label: "Opening Float",
                   amount: shift.openingFloat,
-                  icon: Icons.lock_open,
-                  iconColor: Colors.amber.shade800,
+                  icon: Icons.lock_open_rounded,
+                  neonColor: AppColors.neonAmber,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _buildDrawerTile(
+                  context: context,
                   label: "Cash Collected",
                   amount: shift.cashCollected,
-                  icon: Icons.payments,
-                  iconColor: Colors.green,
+                  icon: Icons.payments_outlined,
+                  neonColor: AppColors.neonEmerald,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
+
+          // Total Cash on Hand Hero Container
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.primaryContainer.withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+              color: isDark
+                  ? AppColors.neonEmerald.withValues(alpha: 0.12)
+                  : AppColors.neonEmerald.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppColors.neonEmerald.withValues(alpha: isDark ? 0.35 : 0.25),
+              ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Column(
+                Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       "Current Cash in Drawer",
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      style: GoogleFonts.dmSans(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: isDark ? Colors.white : AppColors.textPrimary,
+                      ),
                     ),
+                    const SizedBox(height: 2),
                     Text(
-                      "Float + Collected Cash",
-                      style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                      "Opening Float + Cash Collected",
+                      style: GoogleFonts.dmSans(
+                        fontSize: 11,
+                        color: isDark ? Colors.white54 : AppColors.textSecondary,
+                      ),
                     ),
                   ],
                 ),
                 Text(
                   CurrencyFormatter.format(shift.cashOnHand),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
+                  style: GoogleFonts.dmSans(
+                    fontWeight: FontWeight.w800,
                     fontSize: 20,
-                    color: AppColors.primary,
+                    color: AppColors.neonEmerald,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 12),
-          Text(
-            "Shift Date: ${shift.shiftDate}  â€¢  ${shift.billsIssued} Bills Issued",
-            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          const SizedBox(height: 14),
+
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Shift Date: ${shift.shiftDate}",
+                style: GoogleFonts.dmSans(
+                  fontSize: 11,
+                  color: isDark ? Colors.white54 : AppColors.textSecondary,
+                ),
+              ),
+              Text(
+                "${shift.billsIssued} Bills Processed",
+                style: GoogleFonts.dmSans(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white70 : AppColors.textPrimary,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -109,35 +187,48 @@ class ShiftSummaryCard extends StatelessWidget {
   }
 
   Widget _buildDrawerTile({
+    required BuildContext context,
     required String label,
     required double amount,
     required IconData icon,
-    required Color iconColor,
+    required Color neonColor,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.outlineLight),
+        color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon, size: 16, color: iconColor),
+              Icon(icon, size: 16, color: neonColor),
               const SizedBox(width: 6),
               Text(
                 label,
-                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                style: GoogleFonts.dmSans(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white70 : AppColors.textSecondary,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
             CurrencyFormatter.format(amount),
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            style: GoogleFonts.dmSans(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: isDark ? Colors.white : AppColors.textPrimary,
+            ),
           ),
         ],
       ),

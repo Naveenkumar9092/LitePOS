@@ -49,5 +49,24 @@ class AppColors {
   static const Color heldBill = Color(0xFFF59E0B);
   static const Color onlineIndicator = Color(0xFF10B981);
   static const Color offlineIndicator = Color(0xFFEF4444);
+
+  // Modern Neon & Glass Dashboard Accents
+  static const Color neonCyan = Color(0xFF00F2FE);
+  static const Color neonBlue = Color(0xFF0EA5E9);
+  static const Color neonEmerald = Color(0xFF10B981);
+  static const Color neonGreen = Color(0xFF00F5A0);
+  static const Color neonPurple = Color(0xFF8B5CF6);
+  static const Color neonViolet = Color(0xFFA855F7);
+  static const Color neonAmber = Color(0xFFF59E0B);
+  static const Color neonPink = Color(0xFFEC4899);
+  static const Color neonCoral = Color(0xFFFF6B6B);
+
+  // Modern Glassmorphism Surfaces & Gradients
+  static const Color glassCanvasDark = Color(0xFF0B1120);
+  static const Color glassCanvasLight = Color(0xFFF8FAFC);
+  static const Color glassSurfaceDark = Color(0x1AFFFFFF);
+  static const Color glassBorderDark = Color(0x26FFFFFF);
+  static const Color glassSurfaceLight = Color(0xCCFFFFFF);
+  static const Color glassBorderLight = Color(0xFFE2E8F0);
 }
 

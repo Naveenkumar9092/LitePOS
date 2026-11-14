@@ -1,4 +1,5 @@
 import "package:flutter/material.dart";
+import "package:google_fonts/google_fonts.dart";
 import "package:billing_pos_app/core/theme/app_colors.dart";
 
 class OfflineStatusIndicator extends StatelessWidget {
@@ -15,55 +16,70 @@ class OfflineStatusIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final color = isOnline ? AppColors.neonEmerald : AppColors.neonAmber;
+
     return InkWell(
       onTap: onSyncTap,
       borderRadius: BorderRadius.circular(20),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: isOnline
-              ? Colors.green.withValues(alpha: 0.12)
-              : Colors.orange.withValues(alpha: 0.15),
+          color: color.withValues(alpha: isDark ? 0.18 : 0.10),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isOnline ? Colors.green.shade400 : Colors.orange.shade400,
+            color: color.withValues(alpha: isDark ? 0.40 : 0.30),
             width: 1,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: isDark ? 0.15 : 0.08),
+              blurRadius: 8,
+            ),
+          ],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 8,
-              height: 8,
+              width: 7,
+              height: 7,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: isOnline ? Colors.green : Colors.orange,
+                color: color,
+                boxShadow: [
+                  BoxShadow(
+                    color: color,
+                    blurRadius: 6,
+                    spreadRadius: 1,
+                  ),
+                ],
               ),
             ),
             const SizedBox(width: 6),
             Text(
               isOnline ? "ONLINE" : "OFFLINE (SQLite)",
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: isOnline ? Colors.green.shade800 : Colors.orange.shade900,
+              style: GoogleFonts.dmSans(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                color: color,
+                letterSpacing: 0.3,
               ),
             ),
             if (pendingSyncCount > 0) ...[
-              const SizedBox(width: 4),
+              const SizedBox(width: 5),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                 decoration: BoxDecoration(
-                  color: AppColors.primary,
+                  color: AppColors.neonCyan,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   "$pendingSyncCount",
-                  style: const TextStyle(
+                  style: GoogleFonts.dmSans(
                     fontSize: 9,
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
