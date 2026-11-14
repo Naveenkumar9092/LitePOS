@@ -52,6 +52,8 @@ public class BillingPOSDbContext : DbContext, IBillingPOSDbContext
     public DbSet<CreditNoteItem> CreditNoteItems => Set<CreditNoteItem>();
     public DbSet<SyncAuditLog> SyncAuditLogs => Set<SyncAuditLog>();
     public DbSet<PrinterConfiguration> PrinterConfigurations => Set<PrinterConfiguration>();
+    public DbSet<NotificationAuditLog> NotificationAuditLogs => Set<NotificationAuditLog>();
+    public DbSet<ShopPreference> ShopPreferences => Set<ShopPreference>();
 
     public string ProviderName => Database.ProviderName ?? "Unknown";
 
