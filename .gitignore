@@ -31,3 +31,6 @@ dist/**/*.pdb
 windows/flutter/ephemeral/
 *.msi
 *.exe.manifest
+.neon
+node_modules/
+.env.local
