@@ -5,6 +5,7 @@ import "package:billing_pos_app/core/utilities/currency_formatter.dart";
 import "package:billing_pos_app/core/utilities/date_formatter.dart";
 import "package:billing_pos_app/features/payments/models/payment_models.dart";
 import "package:billing_pos_app/features/payments/presentation/payment_state.dart";
+import "package:billing_pos_app/shared/widgets/app_loader.dart";
 import "widgets/close_register_dialog.dart";
 import "widgets/open_register_dialog.dart";
 import "widgets/refund_dialog.dart";
@@ -271,79 +272,102 @@ class _PaymentManagementScreenState extends ConsumerState<PaymentManagementScree
 
             // Filters & Search Bar
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               color: Colors.white,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: "Search payments by invoice #, ref, customer...",
-                        prefixIcon: const Icon(Icons.search, size: 20),
-                        suffixIcon: _searchController.text.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear, size: 18),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  ref.read(paymentStateProvider.notifier).setSearchQuery("");
-                                },
-                              )
-                            : null,
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      onChanged: (val) {
-                        ref.read(paymentStateProvider.notifier).setSearchQuery(val);
-                      },
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final isCompact = constraints.maxWidth < 750;
+                  final searchField = TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: "Search payments by invoice #, ref, customer...",
+                      prefixIcon: const Icon(Icons.search, size: 20),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, size: 18),
+                              onPressed: () {
+                                _searchController.clear();
+                                ref.read(paymentStateProvider.notifier).setSearchQuery("");
+                              },
+                            )
+                          : null,
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                  ),
-                  const SizedBox(width: 16),
+                    onChanged: (val) {
+                      ref.read(paymentStateProvider.notifier).setSearchQuery(val);
+                    },
+                  );
 
-                  Wrap(
-                    spacing: 8,
+                  final filterChips = SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ChoiceChip(
+                          label: const Text("All Modes"),
+                          selected: state.filterMode == null,
+                          onSelected: (selected) {
+                            if (selected) ref.read(paymentStateProvider.notifier).setFilterMode(null);
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        ChoiceChip(
+                          avatar: const Icon(Icons.payments, size: 16),
+                          label: const Text("Cash"),
+                          selected: state.filterMode == PaymentModeEnum.cash,
+                          onSelected: (selected) {
+                            ref.read(paymentStateProvider.notifier).setFilterMode(
+                                  selected ? PaymentModeEnum.cash : null,
+                                );
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        ChoiceChip(
+                          avatar: const Icon(Icons.qr_code_2, size: 16),
+                          label: const Text("UPI"),
+                          selected: state.filterMode == PaymentModeEnum.upi,
+                          onSelected: (selected) {
+                            ref.read(paymentStateProvider.notifier).setFilterMode(
+                                  selected ? PaymentModeEnum.upi : null,
+                                );
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        ChoiceChip(
+                          avatar: const Icon(Icons.credit_card, size: 16),
+                          label: const Text("Card"),
+                          selected: state.filterMode == PaymentModeEnum.card,
+                          onSelected: (selected) {
+                            ref.read(paymentStateProvider.notifier).setFilterMode(
+                                  selected ? PaymentModeEnum.card : null,
+                                );
+                          },
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (isCompact) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        searchField,
+                        const SizedBox(height: 10),
+                        filterChips,
+                      ],
+                    );
+                  }
+
+                  return Row(
                     children: [
-                      ChoiceChip(
-                        label: const Text("All Modes"),
-                        selected: state.filterMode == null,
-                        onSelected: (selected) {
-                          if (selected) ref.read(paymentStateProvider.notifier).setFilterMode(null);
-                        },
-                      ),
-                      ChoiceChip(
-                        avatar: const Icon(Icons.payments, size: 16),
-                        label: const Text("Cash"),
-                        selected: state.filterMode == PaymentModeEnum.cash,
-                        onSelected: (selected) {
-                          ref.read(paymentStateProvider.notifier).setFilterMode(
-                                selected ? PaymentModeEnum.cash : null,
-                              );
-                        },
-                      ),
-                      ChoiceChip(
-                        avatar: const Icon(Icons.qr_code_2, size: 16),
-                        label: const Text("UPI"),
-                        selected: state.filterMode == PaymentModeEnum.upi,
-                        onSelected: (selected) {
-                          ref.read(paymentStateProvider.notifier).setFilterMode(
-                                selected ? PaymentModeEnum.upi : null,
-                              );
-                        },
-                      ),
-                      ChoiceChip(
-                        avatar: const Icon(Icons.credit_card, size: 16),
-                        label: const Text("Card"),
-                        selected: state.filterMode == PaymentModeEnum.card,
-                        onSelected: (selected) {
-                          ref.read(paymentStateProvider.notifier).setFilterMode(
-                                selected ? PaymentModeEnum.card : null,
-                              );
-                        },
-                      ),
+                      Expanded(child: searchField),
+                      const SizedBox(width: 16),
+                      filterChips,
                     ],
-                  ),
-                ],
+                  );
+                },
               ),
             ),
             const Divider(height: 1),
@@ -351,7 +375,7 @@ class _PaymentManagementScreenState extends ConsumerState<PaymentManagementScree
             // Transactions List
             Expanded(
               child: state.isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(child: AppLoader(message: "Loading Payments..."))
                   : displayedPayments.isEmpty
                       ? Center(
                           child: Column(

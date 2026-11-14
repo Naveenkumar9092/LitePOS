@@ -1,4 +1,3 @@
-import "dart:ui";
 import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:go_router/go_router.dart";
@@ -269,85 +268,86 @@ class _FoundationShellState extends ConsumerState<FoundationShell> {
       return Scaffold(
         body: Row(
           children: [
-            // Collapsible & Expandable Glassmorphic Sidebar
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeInOutCubic,
-              width: _isSidebarExpanded ? 245.0 : 76.0,
-              decoration: BoxDecoration(
-                color: isDark
-                    ? const Color(0xFF0F172A).withValues(alpha: 0.90)
-                    : Colors.white.withValues(alpha: 0.95),
-                border: Border(
-                  right: BorderSide(
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.10)
-                        : const Color(0xFFCCE4E9),
-                    width: 1.2,
+            // Collapsible & Expandable Modern Sidebar
+            RepaintBoundary(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOutCubic,
+                width: _isSidebarExpanded ? 245.0 : 76.0,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFF0F172A)
+                      : Colors.white,
+                  border: Border(
+                    right: BorderSide(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.10)
+                          : const Color(0xFFCCE4E9),
+                      width: 1.2,
+                    ),
                   ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: isDark
+                          ? Colors.black.withValues(alpha: 0.35)
+                          : Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 16,
+                      offset: const Offset(2, 0),
+                    ),
+                  ],
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: isDark
-                        ? Colors.black.withValues(alpha: 0.35)
-                        : Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 16,
-                    offset: const Offset(2, 0),
-                  ),
-                ],
-              ),
-              child: ClipRect(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-                  child: Column(
-                    children: [
-                      // Sidebar Header with Branding & Toggle
-                      _buildHeader(roleNeonColor, isDark),
+                child: Column(
+                  children: [
+                    // Sidebar Header with Branding & Toggle
+                    _buildHeader(roleNeonColor, isDark),
 
-                      Divider(
-                        height: 1,
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.08)
-                            : Colors.black.withValues(alpha: 0.06),
+                    Divider(
+                      height: 1,
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.08)
+                          : Colors.black.withValues(alpha: 0.06),
+                    ),
+
+                    // Navigation Destinations List
+                    Expanded(
+                      child: ListView.separated(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                        itemCount: items.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 4),
+                        itemBuilder: (context, index) {
+                          final item = items[index];
+                          final isSelected = index == selectedIndex;
+                          return _buildNavItem(
+                            item: item,
+                            isSelected: isSelected,
+                            roleNeonColor: roleNeonColor,
+                            isDark: isDark,
+                            onTap: () => _onItemTapped(index, context, isCashier),
+                          );
+                        },
                       ),
+                    ),
 
-                      // Navigation Destinations List
-                      Expanded(
-                        child: ListView.separated(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                          itemCount: items.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 4),
-                          itemBuilder: (context, index) {
-                            final item = items[index];
-                            final isSelected = index == selectedIndex;
-                            return _buildNavItem(
-                              item: item,
-                              isSelected: isSelected,
-                              roleNeonColor: roleNeonColor,
-                              isDark: isDark,
-                              onTap: () => _onItemTapped(index, context, isCashier),
-                            );
-                          },
-                        ),
-                      ),
+                    Divider(
+                      height: 1,
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.08)
+                          : Colors.black.withValues(alpha: 0.06),
+                    ),
 
-                      Divider(
-                        height: 1,
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.08)
-                            : Colors.black.withValues(alpha: 0.06),
-                      ),
-
-                      // Sidebar Footer: User Profile & Quick Logout
-                      _buildFooter(user, roleNeonColor, isDark),
-                    ],
-                  ),
+                    // Sidebar Footer: User Profile & Quick Logout
+                    _buildFooter(user, roleNeonColor, isDark),
+                  ],
                 ),
               ),
             ),
 
             // Content Area
-            Expanded(child: widget.child),
+            Expanded(
+              child: RepaintBoundary(
+                child: widget.child,
+              ),
+            ),
           ],
         ),
       );
@@ -419,14 +419,60 @@ class _FoundationShellState extends ConsumerState<FoundationShell> {
   }
 
   Widget _buildHeader(Color roleNeonColor, bool isDark) {
+    if (!_isSidebarExpanded) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    roleNeonColor,
+                    roleNeonColor.withValues(alpha: 0.7),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: [
+                  BoxShadow(
+                    color: roleNeonColor.withValues(alpha: 0.35),
+                    blurRadius: 8,
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.point_of_sale_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+            const SizedBox(height: 10),
+            IconButton(
+              icon: Icon(
+                Icons.menu_rounded,
+                size: 20,
+                color: isDark ? Colors.white70 : AppColors.textSecondary,
+              ),
+              tooltip: "Expand Sidebar",
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              onPressed: () {
+                setState(() {
+                  _isSidebarExpanded = true;
+                });
+              },
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: _isSidebarExpanded ? 14 : 10,
-        vertical: 14,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       child: Row(
-        mainAxisAlignment:
-            _isSidebarExpanded ? MainAxisAlignment.spaceBetween : MainAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(
             children: [
@@ -453,43 +499,41 @@ class _FoundationShellState extends ConsumerState<FoundationShell> {
                   size: 20,
                 ),
               ),
-              if (_isSidebarExpanded) ...[
-                const SizedBox(width: 10),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "LitePOS",
-                      style: GoogleFonts.dmSans(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                        letterSpacing: -0.3,
-                        color: isDark ? Colors.white : AppColors.textPrimary,
-                      ),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Pooja POS",
+                    style: GoogleFonts.dmSans(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                      letterSpacing: -0.3,
+                      color: isDark ? Colors.white : AppColors.textPrimary,
                     ),
-                    Text(
-                      "Cloud & Offline Suite",
-                      style: GoogleFonts.dmSans(
-                        fontSize: 10,
-                        color: isDark ? Colors.white54 : AppColors.textSecondary,
-                        fontWeight: FontWeight.w500,
-                      ),
+                  ),
+                  Text(
+                    "Sweets & Cafe Suite",
+                    style: GoogleFonts.dmSans(
+                      fontSize: 10,
+                      color: isDark ? Colors.white54 : AppColors.textSecondary,
+                      fontWeight: FontWeight.w500,
                     ),
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
             ],
           ),
           IconButton(
             icon: Icon(
-              _isSidebarExpanded ? Icons.menu_open_rounded : Icons.menu_rounded,
+              Icons.menu_open_rounded,
               size: 20,
               color: isDark ? Colors.white70 : AppColors.textSecondary,
             ),
-            tooltip: _isSidebarExpanded ? "Collapse Sidebar" : "Expand Sidebar",
+            tooltip: "Collapse Sidebar",
             onPressed: () {
               setState(() {
-                _isSidebarExpanded = !_isSidebarExpanded;
+                _isSidebarExpanded = false;
               });
             },
           ),

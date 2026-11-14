@@ -5,6 +5,7 @@ analyzer:
     - "flutter/**"
     - build/**
     - windows/**
+    - web/**
   errors:
     deprecated_member_use: ignore
 

@@ -8,6 +8,7 @@ import "package:billing_pos_app/core/utilities/currency_formatter.dart";
 import "package:billing_pos_app/features/dashboard/models/dashboard_models.dart";
 import "package:billing_pos_app/features/dashboard/presentation/dashboard_state.dart";
 import "package:billing_pos_app/shared/widgets/glass_card.dart";
+import "package:billing_pos_app/shared/widgets/app_loader.dart";
 import "payment_summary_card.dart";
 import "recent_transactions_widget.dart";
 import "sales_chart_widget.dart";
@@ -22,7 +23,7 @@ class AdminDashboardView extends ConsumerWidget {
 
     return adminAsync.when(
       loading: () => const Center(
-        child: CircularProgressIndicator(color: AppColors.neonCyan),
+        child: AppLoader(message: "Loading Admin Dashboard..."),
       ),
       error: (err, stack) => Center(
         child: Column(

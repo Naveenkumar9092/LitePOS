@@ -1,5 +1,7 @@
 import "package:dio/dio.dart";
 import "../constants/app_constants.dart";
+import "../routing/app_router.dart";
+import "../routing/route_names.dart";
 import "../storage/storage_service.dart";
 
 class AuthInterceptor extends Interceptor {
@@ -29,7 +31,11 @@ class AuthInterceptor extends Interceptor {
   }
 
   @override
-  void onError(DioException err, ErrorInterceptorHandler handler) {
+  void onError(DioException err, ErrorInterceptorHandler handler) async {
+    if (err.response?.statusCode == 401) {
+      await _storageService.delete(AppConstants.tokenKey);
+      appRouter.go(RouteNames.login);
+    }
     return handler.next(err);
   }
 }

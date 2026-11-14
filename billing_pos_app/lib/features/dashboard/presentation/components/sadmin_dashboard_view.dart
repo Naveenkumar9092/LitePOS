@@ -5,6 +5,7 @@ import "package:billing_pos_app/core/theme/app_colors.dart";
 import "package:billing_pos_app/core/utilities/currency_formatter.dart";
 import "package:billing_pos_app/shared/widgets/glass_card.dart";
 import "package:billing_pos_app/shared/widgets/status_badge.dart";
+import "package:billing_pos_app/shared/widgets/app_loader.dart";
 import "package:billing_pos_app/features/dashboard/models/dashboard_models.dart";
 import "package:billing_pos_app/features/dashboard/presentation/dashboard_state.dart";
 
@@ -17,7 +18,7 @@ class SAdminDashboardView extends ConsumerWidget {
 
     return sadminAsync.when(
       loading: () => const Center(
-        child: CircularProgressIndicator(color: AppColors.neonCyan),
+        child: AppLoader(message: "Loading Super Admin Dashboard..."),
       ),
       error: (err, stack) => Center(
         child: Column(
@@ -413,38 +414,58 @@ class SAdminDashboardView extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                width: 4,
-                height: 18,
-                decoration: BoxDecoration(
-                  color: AppColors.neonEmerald,
-                  borderRadius: BorderRadius.circular(4),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.neonEmerald.withValues(alpha: 0.6),
-                      blurRadius: 8,
+              Row(
+                children: [
+                  Container(
+                    width: 4,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      color: AppColors.neonEmerald,
+                      borderRadius: BorderRadius.circular(4),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.neonEmerald.withValues(alpha: 0.6),
+                          blurRadius: 8,
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    "Connected POS Terminal Nodes",
+                    style: GoogleFonts.dmSans(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : AppColors.textPrimary,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 10),
-              Text(
-                "Connected POS Terminal Nodes",
-                style: GoogleFonts.dmSans(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : AppColors.textPrimary,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.neonEmerald.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  "${data.registeredDevices} Total / ${data.registeredDevices - data.offlineDevices} Online",
+                  style: GoogleFonts.dmSans(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.neonEmerald,
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 14),
-          _buildDeviceRow("POS-MAIN-01 (Chrome Web / Cloud)", "Online • Synchronized", Icons.desktop_windows_rounded, AppColors.neonEmerald, "ONLINE"),
+          _buildDeviceRow("DEV-POS-01 (Pooja Main Counter)", "Online • Synchronized with Cloud Neon", Icons.desktop_windows_rounded, AppColors.neonEmerald, "ONLINE"),
           Divider(height: 18, color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05)),
-          _buildDeviceRow("POS-COUNTER-02 (Counter Terminal)", "Online • Idle", Icons.point_of_sale_rounded, AppColors.neonCyan, "ONLINE"),
+          _buildDeviceRow("DEV-POS-02 (Pooja Sweets Billing 2)", "Online • Idle & Ready", Icons.point_of_sale_rounded, AppColors.neonCyan, "ONLINE"),
           Divider(height: 18, color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05)),
-          _buildDeviceRow("POS-TABLET-03 (Floor Waiter Tablet)", "Offline • Local Cache", Icons.tablet_android_rounded, AppColors.neonAmber, "STANDALONE"),
+          _buildDeviceRow("DEV-POS-MOB (Pooja Floor Service)", "Standby • Local Cache Mode", Icons.tablet_android_rounded, AppColors.neonAmber, "STANDBY"),
         ],
       ),
     );

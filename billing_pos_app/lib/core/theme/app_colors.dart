@@ -3,6 +3,7 @@ import "package:flutter/material.dart";
 class AppColors {
   // Brand Palette: #24B1B1 (Teal), #FFFFFF (White), #000000 (Black), #EBF4F6 (Ice Teal)
   static const Color primary = Color(0xFF24B1B1);
+  static const Color primaryDark = Color(0xFF167272);
   static const Color onPrimary = Color(0xFFFFFFFF);
   static const Color primaryContainer = Color(0xFFEBF4F6);
   static const Color onPrimaryContainer = Color(0xFF000000);
@@ -13,23 +14,23 @@ class AppColors {
   static const Color secondaryContainer = Color(0xFFD4EFF1);
   static const Color onSecondaryContainer = Color(0xFF04212C);
 
-  // Status Colors
-  static const Color success = Color(0xFF10B981);
+  // Status Colors (Enhanced Darker High-Contrast Green)
+  static const Color success = Color(0xFF047857); // Rich dark emerald
   static const Color onSuccess = Color(0xFFFFFFFF);
   static const Color successContainer = Color(0xFFD1FAE5);
 
-  static const Color warning = Color(0xFFF59E0B);
+  static const Color warning = Color(0xFFD97706);
   static const Color onWarning = Color(0xFFFFFFFF);
 
-  static const Color error = Color(0xFFEF4444);
+  static const Color error = Color(0xFFDC2626);
   static const Color onError = Color(0xFFFFFFFF);
   static const Color errorContainer = Color(0xFFFEE2E2);
 
   static const Color info = Color(0xFF24B1B1);
 
-  // Text Colors
+  // Text Colors (#000000 black & high-contrast slate)
   static const Color textPrimary = Color(0xFF000000);
-  static const Color textSecondary = Color(0xFF5A7175);
+  static const Color textSecondary = Color(0xFF475569);
 
   // Background and Surfaces
   static const Color background = Color(0xFFEBF4F6);
@@ -46,26 +47,26 @@ class AppColors {
   static const Color outlineDark = Color(0xFF28484F);
 
   // POS Special Colors
-  static const Color heldBill = Color(0xFFF59E0B);
-  static const Color onlineIndicator = Color(0xFF10B981);
-  static const Color offlineIndicator = Color(0xFFEF4444);
+  static const Color heldBill = Color(0xFFD97706);
+  static const Color onlineIndicator = Color(0xFF047857);
+  static const Color offlineIndicator = Color(0xFFDC2626);
 
-  // Modern Neon & Glass Dashboard Accents
+  // Modern Neon & Glass Dashboard Accents (Deeper Rich Greens)
   static const Color neonCyan = Color(0xFF24B1B1);
   static const Color neonBlue = Color(0xFF1A9393);
-  static const Color neonEmerald = Color(0xFF10B981);
-  static const Color neonGreen = Color(0xFF00F5A0);
-  static const Color neonPurple = Color(0xFF8B5CF6);
-  static const Color neonViolet = Color(0xFFA855F7);
-  static const Color neonAmber = Color(0xFFF59E0B);
-  static const Color neonPink = Color(0xFFEC4899);
-  static const Color neonCoral = Color(0xFFFF6B6B);
+  static const Color neonEmerald = Color(0xFF047857); // Dark rich green
+  static const Color neonGreen = Color(0xFF065F46);   // Deep forest green
+  static const Color neonPurple = Color(0xFF7C3AED);
+  static const Color neonViolet = Color(0xFF8B5CF6);
+  static const Color neonAmber = Color(0xFFD97706);
+  static const Color neonPink = Color(0xFFDB2777);
+  static const Color neonCoral = Color(0xFFE11D48);
 
   // Modern Glassmorphism Surfaces & Gradients
   static const Color glassCanvasDark = Color(0xFF0B1416);
   static const Color glassCanvasLight = Color(0xFFEBF4F6);
   static const Color glassSurfaceDark = Color(0x1AFFFFFF);
   static const Color glassBorderDark = Color(0x26FFFFFF);
-  static const Color glassSurfaceLight = Color(0xF2FFFFFF);
+  static const Color glassSurfaceLight = Color(0xF5FFFFFF);
   static const Color glassBorderLight = Color(0xFFCCE4E9);
 }

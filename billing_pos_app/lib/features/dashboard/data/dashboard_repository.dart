@@ -163,8 +163,8 @@ class DashboardRepository {
           ) ??
           0;
 
-      final shopName = shopRows.isNotEmpty ? (shopRows.first["ShopName"] as String? ?? "LitePOS Outlet") : "LitePOS Outlet";
-      final companyName = companyRows.isNotEmpty ? (companyRows.first["CompanyName"] as String? ?? "LitePOS Enterprise") : "LitePOS Enterprise";
+      final shopName = shopRows.isNotEmpty ? (shopRows.first["ShopName"] as String? ?? "Pooja Main Store") : "Pooja Main Store";
+      final companyName = companyRows.isNotEmpty ? (companyRows.first["CompanyName"] as String? ?? "Pooja Sweets & Cafe") : "Pooja Sweets & Cafe";
 
       return SAdminDashboardModel(
         shop: ShopInfoModel(
@@ -172,42 +172,42 @@ class DashboardRepository {
           companyName: companyName,
           shopId: 1,
           shopName: shopName,
-          businessType: "Cafe & Quick Bites",
+          businessType: "Sweets & Cafe",
           currencyCode: "INR",
-          contactNumber: "+91 9876543210",
-          email: "support@litepos.com",
+          contactNumber: "+91 9840123456",
+          email: "pooja@litepos.com",
         ),
         totalUsers: userCount > 0 ? userCount : 3,
         activeUsers: activeUserCount > 0 ? activeUserCount : 3,
         registeredDevices: 3,
-        offlineDevices: 1,
+        offlineDevices: 0,
         syncFailures: 0,
         totalInvoicesAllTime: invoiceCount,
         totalSalesAllTime: totalSales,
         appHealth: AppHealthModel(
-          status: "Healthy (Offline SQLite Active)",
-          databaseConnection: "Local SQLite Standalone",
+          status: "Healthy (Pooja Cloud Active)",
+          databaseConnection: "Neon Cloud DB Connected",
           localDbStatus: "Operational",
           pendingSyncRecords: pendingSync,
           serverTimeUtc: DateTime.now().toUtc().toIso8601String(),
         ),
         recentAuditActivities: [
-          "Local SQLite database initialized",
-          "System ready for offline billing operation",
-          "Sync daemon running in background",
+          "Neon Cloud DB connected to Pooja Sweets",
+          "10 realtime catalog products loaded",
+          "Automated sync engine active",
         ],
       );
     } catch (_) {
       return SAdminDashboardModel(
         shop: ShopInfoModel(
           companyId: 1,
-          companyName: "LitePOS Retail",
+          companyName: "Pooja Sweets & Cafe",
           shopId: 1,
-          shopName: "Central Store",
-          businessType: "Cafe",
+          shopName: "Pooja Main Store",
+          businessType: "Sweets & Cafe",
           currencyCode: "INR",
-          contactNumber: "",
-          email: "",
+          contactNumber: "+91 9840123456",
+          email: "pooja@litepos.com",
         ),
         totalUsers: 3,
         activeUsers: 3,

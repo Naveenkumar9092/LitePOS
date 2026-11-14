@@ -20,15 +20,27 @@ class AppDatabase {
 
   Future<Database> _initDatabase() async {
     if (kIsWeb) {
-      databaseFactory = databaseFactoryFfiWeb;
-      return await databaseFactoryFfiWeb.openDatabase(
-        _databaseName,
-        options: OpenDatabaseOptions(
-          version: _databaseVersion,
-          onCreate: _onCreate,
-          onUpgrade: _onUpgrade,
-        ),
-      );
+      try {
+        databaseFactory = databaseFactoryFfiWeb;
+        return await databaseFactoryFfiWeb.openDatabase(
+          _databaseName,
+          options: OpenDatabaseOptions(
+            version: _databaseVersion,
+            onCreate: _onCreate,
+            onUpgrade: _onUpgrade,
+          ),
+        );
+      } catch (_) {
+        databaseFactory = databaseFactoryFfiWebNoWebWorker;
+        return await databaseFactoryFfiWebNoWebWorker.openDatabase(
+          _databaseName,
+          options: OpenDatabaseOptions(
+            version: _databaseVersion,
+            onCreate: _onCreate,
+            onUpgrade: _onUpgrade,
+          ),
+        );
+      }
     }
 
     if (defaultTargetPlatform == TargetPlatform.windows ||
