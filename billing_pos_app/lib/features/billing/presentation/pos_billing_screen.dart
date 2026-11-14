@@ -16,6 +16,7 @@ import "../../products/models/product_model.dart";
 import "../../products/presentation/product_state.dart";
 import "billing_state.dart";
 import "cart_state.dart";
+import "package:billing_pos_app/shared/widgets/app_toast.dart";
 import "widgets/held_bills_dialog.dart";
 import "widgets/payment_dialog.dart";
 import "widgets/receipt_preview_dialog.dart";
@@ -70,45 +71,24 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
   Future<void> _handleHoldBill() async {
     final cart = ref.read(cartNotifierProvider);
     if (cart.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Cannot hold an empty cart.", style: GoogleFonts.dmSans()),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      AppToast.showWarning(context, "Cannot hold an empty cart");
       return;
     }
 
     final success = await ref.read(billingNotifierProvider.notifier).holdBill(cart);
-    if (mounted && success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.pause_circle_filled, color: Colors.white, size: 20),
-              const SizedBox(width: 8),
-              Text("Bill placed on hold successfully.", style: GoogleFonts.dmSans(fontWeight: FontWeight.w600)),
-            ],
-          ),
-          backgroundColor: AppColors.secondary,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+    if (mounted) {
+      if (success) {
+        AppToast.showSuccess(context, "Bill placed on hold successfully");
+      } else {
+        AppToast.showError(context, "Failed to place bill on hold");
+      }
     }
   }
 
   Future<void> _handlePayment() async {
     final cart = ref.read(cartNotifierProvider);
     if (cart.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Cart is empty. Tap products to add items to bill.", style: GoogleFonts.dmSans()),
-          backgroundColor: AppColors.primaryDark,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      AppToast.showWarning(context, "Cart is empty. Tap products to add items to bill.");
       return;
     }
 
@@ -127,6 +107,7 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
           );
 
       if (invoice != null && mounted) {
+        AppToast.showSuccess(context, "Sale completed! Invoice #${invoice.invoiceNumber}");
         showDialog(
           context: context,
           barrierDismissible: false,
@@ -190,6 +171,7 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
                           onPressed: () {
                             cartNotifier.clearCustomer();
                             Navigator.of(ctx).pop();
+                            AppToast.showInfo(context, "Switched to Walk-in Customer");
                           },
                         ),
                       ),
@@ -243,6 +225,7 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
                                 onTap: () {
                                   cartNotifier.setCustomer(c.id, c.customerName);
                                   Navigator.of(ctx).pop();
+                                  AppToast.showSuccess(context, "Customer '${c.customerName}' linked to bill");
                                 },
                               );
                             },
@@ -317,6 +300,7 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
             onPressed: () {
               ref.read(cartNotifierProvider.notifier).setDiscount(0.0);
               Navigator.of(ctx).pop();
+              AppToast.showInfo(context, "Discount cleared");
             },
             child: Text("Remove", style: GoogleFonts.dmSans(color: AppColors.error, fontWeight: FontWeight.bold)),
           ),
@@ -334,6 +318,11 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
               final discount = double.tryParse(controller.text.trim()) ?? 0.0;
               ref.read(cartNotifierProvider.notifier).setDiscount(discount);
               Navigator.of(ctx).pop();
+              if (discount > 0) {
+                AppToast.showSuccess(context, "Discount ₹${discount.toStringAsFixed(2)} applied");
+              } else {
+                AppToast.showInfo(context, "Discount removed");
+              }
             },
             child: Text("Apply Discount", style: GoogleFonts.dmSans(fontWeight: FontWeight.bold)),
           ),
@@ -941,8 +930,15 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
           onTap: isAvailable
               ? () {
                   ref.read(cartNotifierProvider.notifier).addToCart(product);
+                  AppToast.showSuccess(
+                    context,
+                    "Added ${product.productName}",
+                    duration: const Duration(milliseconds: 1400),
+                  );
                 }
-              : null,
+              : () {
+                  AppToast.showWarning(context, "${product.productName} is currently out of stock");
+                },
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1182,7 +1178,10 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
                   IconButton(
                     icon: const Icon(Icons.delete_sweep_rounded, color: AppColors.error, size: 22),
                     tooltip: "Clear Order Ticket",
-                    onPressed: () => ref.read(cartNotifierProvider.notifier).clearCart(),
+                    onPressed: () {
+                      ref.read(cartNotifierProvider.notifier).clearCart();
+                      AppToast.showInfo(context, "Order ticket cleared");
+                    },
                   ),
               ],
             ),
@@ -1327,7 +1326,13 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
                                 children: [
                                   InkWell(
                                     borderRadius: const BorderRadius.horizontal(left: Radius.circular(8)),
-                                    onTap: () => ref.read(cartNotifierProvider.notifier).decrementQuantity(item.productId),
+                                    onTap: () {
+                                      final isRemoving = item.quantity == 1;
+                                      ref.read(cartNotifierProvider.notifier).decrementQuantity(item.productId);
+                                      if (isRemoving) {
+                                        AppToast.showInfo(context, "Removed ${item.productName}", duration: const Duration(milliseconds: 1400));
+                                      }
+                                    },
                                     child: Padding(
                                       padding: const EdgeInsets.all(6.0),
                                       child: Icon(
@@ -1346,7 +1351,10 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
                                   ),
                                   InkWell(
                                     borderRadius: const BorderRadius.horizontal(right: Radius.circular(8)),
-                                    onTap: () => ref.read(cartNotifierProvider.notifier).incrementQuantity(item.productId),
+                                    onTap: () {
+                                      ref.read(cartNotifierProvider.notifier).incrementQuantity(item.productId);
+                                      AppToast.showInfo(context, "${item.productName} qty: ${item.quantity + 1}", duration: const Duration(milliseconds: 1200));
+                                    },
                                     child: const Padding(
                                       padding: EdgeInsets.all(6.0),
                                       child: Icon(

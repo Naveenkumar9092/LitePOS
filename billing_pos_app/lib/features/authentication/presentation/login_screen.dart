@@ -6,6 +6,7 @@ import "../../../core/theme/app_colors.dart";
 import "../../../shared/widgets/app_button.dart";
 import "../../../shared/widgets/app_card.dart";
 import "../../../shared/widgets/app_text_field.dart";
+import "../../../shared/widgets/app_toast.dart";
 import "auth_state.dart";
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -39,12 +40,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final password = _passwordController.text.trim();
 
     if (username.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Please enter both username and password."),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      AppToast.showError(context, "Please enter both username and password.");
       return;
     }
 

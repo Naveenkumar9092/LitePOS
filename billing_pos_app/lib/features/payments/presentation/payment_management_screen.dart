@@ -6,6 +6,7 @@ import "package:billing_pos_app/core/utilities/date_formatter.dart";
 import "package:billing_pos_app/features/payments/models/payment_models.dart";
 import "package:billing_pos_app/features/payments/presentation/payment_state.dart";
 import "package:billing_pos_app/shared/widgets/app_loader.dart";
+import "package:billing_pos_app/shared/widgets/app_toast.dart";
 import "widgets/close_register_dialog.dart";
 import "widgets/open_register_dialog.dart";
 import "widgets/refund_dialog.dart";
@@ -35,15 +36,11 @@ class _PaymentManagementScreenState extends ConsumerState<PaymentManagementScree
 
     ref.listen(paymentStateProvider, (previous, next) {
       if (next.errorMessage != null && next.errorMessage != previous?.errorMessage) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(next.errorMessage!), backgroundColor: AppColors.error),
-        );
+        AppToast.showError(context, next.errorMessage!);
         ref.read(paymentStateProvider.notifier).clearMessages();
       }
       if (next.successMessage != null && next.successMessage != previous?.successMessage) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(next.successMessage!), backgroundColor: AppColors.success),
-        );
+        AppToast.showSuccess(context, next.successMessage!);
         ref.read(paymentStateProvider.notifier).clearMessages();
       }
     });

@@ -4,6 +4,7 @@ import "package:billing_pos_app/core/theme/app_colors.dart";
 import "package:billing_pos_app/core/utilities/currency_formatter.dart";
 import "package:billing_pos_app/core/utilities/date_formatter.dart";
 import "package:billing_pos_app/features/billing/presentation/billing_state.dart";
+import "package:billing_pos_app/shared/widgets/app_toast.dart";
 
 class HeldBillsDialog extends ConsumerWidget {
   const HeldBillsDialog({super.key});
@@ -124,6 +125,7 @@ class HeldBillsDialog extends ConsumerWidget {
                                       final success = await ref.read(billingNotifierProvider.notifier).resumeHeldBill(bill);
                                       if (context.mounted && success) {
                                         Navigator.of(context).pop();
+                                        AppToast.showSuccess(context, "Resumed ${bill.invoiceNumber} into order ticket");
                                       }
                                     },
                                   ),
