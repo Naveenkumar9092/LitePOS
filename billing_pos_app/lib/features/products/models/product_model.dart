@@ -28,7 +28,7 @@ class ProductModel {
     this.description,
     this.productImageStorageKey,
     required this.sellingPrice,
-    this.taxId,
+    this.taxId, 
     required this.taxPercentage,
     this.hsnCode,
     required this.isAvailable,

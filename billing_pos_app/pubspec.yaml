@@ -34,6 +34,8 @@ dependencies:
 
   # UI & Design System
   google_fonts: ^6.2.1
+  sqflite_common_ffi: ^2.4.7
+  sqflite_common_ffi_web: ^1.2.2
 
 dev_dependencies:
   flutter_test:

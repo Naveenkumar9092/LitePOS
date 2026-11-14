@@ -1,13 +1,28 @@
+import "package:flutter/foundation.dart";
 import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
+import "package:sqflite_common_ffi/sqflite_ffi.dart";
+import "package:sqflite_common_ffi_web/sqflite_ffi_web.dart";
 import "core/constants/app_constants.dart";
 import "core/routing/app_router.dart";
 import "core/storage/storage_service.dart";
 import "core/theme/app_theme.dart";
 import "features/company/data/company_repository.dart";
 
+void _initDatabaseFactory() {
+  if (kIsWeb) {
+    databaseFactory = databaseFactoryFfiWeb;
+  } else if (defaultTargetPlatform == TargetPlatform.windows ||
+      defaultTargetPlatform == TargetPlatform.linux ||
+      defaultTargetPlatform == TargetPlatform.macOS) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  _initDatabaseFactory();
   final storageService = await StorageService.create();
 
   runApp(

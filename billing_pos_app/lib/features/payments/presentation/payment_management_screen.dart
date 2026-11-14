@@ -54,21 +54,13 @@ class _PaymentManagementScreenState extends ConsumerState<PaymentManagementScree
           children: [
             // Header Bar
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               color: Colors.white,
-              child: Row(
-                children: [
-                  const Icon(Icons.payments_outlined, color: AppColors.primary, size: 28),
-                  const SizedBox(width: 12),
-                  const Text(
-                    "Payment Management",
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(width: 12),
-
-                  // Register Status Badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final isNarrow = constraints.maxWidth < 700;
+                  final statusBadge = Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: isRegisterOpen ? Colors.green.shade50 : Colors.amber.shade50,
                       borderRadius: BorderRadius.circular(12),
@@ -85,79 +77,126 @@ class _PaymentManagementScreenState extends ConsumerState<PaymentManagementScree
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          isRegisterOpen ? "Register Open" : "Register Closed",
+                          isRegisterOpen ? "Open" : "Closed",
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 11,
                             fontWeight: FontWeight.bold,
                             color: isRegisterOpen ? Colors.green.shade800 : Colors.amber.shade900,
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  const Spacer(),
+                  );
 
-                  // Register Open / Close Button
-                  if (!isRegisterOpen) ...[
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.point_of_sale, size: 16),
-                      label: const Text("Open Register"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                      ),
-                      onPressed: () {
-                        showDialog(
-                          context: context,
-                          builder: (ctx) => OpenRegisterDialog(
-                            onConfirm: (float, notes) =>
-                                ref.read(paymentStateProvider.notifier).openRegister(float, notes: notes),
+                  final buttons = Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!isRegisterOpen)
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.point_of_sale, size: 14),
+                          label: const Text("Open Register", style: TextStyle(fontSize: 12)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                           ),
-                        );
-                      },
-                    ),
-                  ] else ...[
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.lock_clock, size: 16, color: Colors.orange),
-                      label: const Text("Close Register", style: TextStyle(color: Colors.orange)),
-                      onPressed: () {
-                        final expected = recon?.expectedCashInDrawer ?? 0.0;
-                        showDialog(
-                          context: context,
-                          builder: (ctx) => CloseRegisterDialog(
-                            expectedCash: expected,
-                            onConfirm: (actual, notes) =>
-                                ref.read(paymentStateProvider.notifier).closeRegister(actual, notes: notes),
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (ctx) => OpenRegisterDialog(
+                                onConfirm: (float, notes) =>
+                                    ref.read(paymentStateProvider.notifier).openRegister(float, notes: notes),
+                              ),
+                            );
+                          },
+                        )
+                      else
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.lock_clock, size: 14, color: Colors.orange),
+                          label: const Text("Close Register", style: TextStyle(color: Colors.orange, fontSize: 12)),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                           ),
-                        );
-                      },
-                    ),
-                  ],
-                  const SizedBox(width: 10),
-
-                  // Issue Refund Button
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.assignment_return_outlined, size: 16, color: AppColors.error),
-                    label: const Text("Refund", style: TextStyle(color: AppColors.error)),
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        builder: (ctx) => RefundDialog(
-                          onConfirm: (invId, amt, rsn) =>
-                              ref.read(paymentStateProvider.notifier).processRefund(invId, amt, rsn),
+                          onPressed: () {
+                            final expected = recon?.expectedCashInDrawer ?? 0.0;
+                            showDialog(
+                              context: context,
+                              builder: (ctx) => CloseRegisterDialog(
+                                expectedCash: expected,
+                                onConfirm: (actual, notes) =>
+                                    ref.read(paymentStateProvider.notifier).closeRegister(actual, notes: notes),
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
-                  const SizedBox(width: 10),
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.assignment_return_outlined, size: 14, color: AppColors.error),
+                        label: const Text("Refund", style: TextStyle(color: AppColors.error, fontSize: 12)),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        ),
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            builder: (ctx) => RefundDialog(
+                              onConfirm: (invId, amt, rsn) =>
+                                  ref.read(paymentStateProvider.notifier).processRefund(invId, amt, rsn),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton.filledTonal(
+                        icon: const Icon(Icons.refresh, size: 18),
+                        tooltip: "Refresh Payments",
+                        onPressed: () => ref.read(paymentStateProvider.notifier).loadData(),
+                      ),
+                    ],
+                  );
 
-                  // Refresh Button
-                  IconButton.filledTonal(
-                    icon: const Icon(Icons.refresh, size: 20),
-                    tooltip: "Refresh Payments",
-                    onPressed: () => ref.read(paymentStateProvider.notifier).loadData(),
-                  ),
-                ],
+                  if (isNarrow) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.payments_outlined, color: AppColors.primary, size: 22),
+                            const SizedBox(width: 8),
+                            const Expanded(
+                              child: Text(
+                                "Payment Management",
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            statusBadge,
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: buttons,
+                        ),
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    children: [
+                      const Icon(Icons.payments_outlined, color: AppColors.primary, size: 28),
+                      const SizedBox(width: 12),
+                      const Text(
+                        "Payment Management",
+                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(width: 12),
+                      statusBadge,
+                      const Spacer(),
+                      buttons,
+                    ],
+                  );
+                },
               ),
             ),
             const Divider(height: 1),
