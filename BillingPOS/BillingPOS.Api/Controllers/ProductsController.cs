@@ -122,6 +122,94 @@ public class ProductsController : BaseApiController
         return Ok(result);
     }
 
+    [HttpPost("{id:long}/image/upload")]
+    [Authorize(Roles = $"{RoleConstants.SAdmin},{RoleConstants.Admin}")]
+    [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UploadProductImage(long id, IFormFile file, CancellationToken cancellationToken)
+    {
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest(ApiResponse<string>.FailureResult("Please provide an image file."));
+        }
+
+        if (file.Length > 5 * 1024 * 1024)
+        {
+            return BadRequest(ApiResponse<string>.FailureResult("File size cannot exceed 5MB."));
+        }
+
+        var allowedExtensions = new[] { ".png", ".jpg", ".jpeg", ".webp", ".svg" };
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (!allowedExtensions.Contains(ext))
+        {
+            return BadRequest(ApiResponse<string>.FailureResult("Invalid image format. Allowed: PNG, JPG, JPEG, WEBP, SVG."));
+        }
+
+        var uploadDir = Path.Combine(Directory.GetCurrentDirectory(), "uploads", "products");
+        if (!Directory.Exists(uploadDir))
+        {
+            Directory.CreateDirectory(uploadDir);
+        }
+
+        var fileName = $"prod_{id}_{Guid.NewGuid()}{ext}";
+        var filePath = Path.Combine(uploadDir, fileName);
+
+        using (var outputStream = new FileStream(filePath, FileMode.Create))
+        {
+            await file.CopyToAsync(outputStream, cancellationToken);
+        }
+
+        var relativeUrl = $"/uploads/products/{fileName}";
+        var updateResult = await _productService.UpdateProductImageAsync(id, relativeUrl, cancellationToken);
+        if (!updateResult.Success)
+        {
+            return BadRequest(updateResult);
+        }
+
+        return Ok(ApiResponse<string>.SuccessResult(relativeUrl, "Product image uploaded successfully."));
+    }
+
+    [HttpPost("upload-image")]
+    [Authorize(Roles = $"{RoleConstants.SAdmin},{RoleConstants.Admin}")]
+    [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UploadImageOnly(IFormFile file, CancellationToken cancellationToken)
+    {
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest(ApiResponse<string>.FailureResult("Please provide an image file."));
+        }
+
+        if (file.Length > 5 * 1024 * 1024)
+        {
+            return BadRequest(ApiResponse<string>.FailureResult("File size cannot exceed 5MB."));
+        }
+
+        var allowedExtensions = new[] { ".png", ".jpg", ".jpeg", ".webp", ".svg" };
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (!allowedExtensions.Contains(ext))
+        {
+            return BadRequest(ApiResponse<string>.FailureResult("Invalid image format. Allowed: PNG, JPG, JPEG, WEBP, SVG."));
+        }
+
+        var uploadDir = Path.Combine(Directory.GetCurrentDirectory(), "uploads", "products");
+        if (!Directory.Exists(uploadDir))
+        {
+            Directory.CreateDirectory(uploadDir);
+        }
+
+        var fileName = $"prod_{Guid.NewGuid()}{ext}";
+        var filePath = Path.Combine(uploadDir, fileName);
+
+        using (var outputStream = new FileStream(filePath, FileMode.Create))
+        {
+            await file.CopyToAsync(outputStream, cancellationToken);
+        }
+
+        var relativeUrl = $"/uploads/products/{fileName}";
+        return Ok(ApiResponse<string>.SuccessResult(relativeUrl, "Image uploaded successfully."));
+    }
+
     [HttpGet("search")]
     [ProducesResponseType(typeof(ApiResponse<List<ProductSearchResultDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> SearchProducts([FromQuery] string query, CancellationToken cancellationToken)

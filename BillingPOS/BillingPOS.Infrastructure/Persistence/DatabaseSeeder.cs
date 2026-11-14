@@ -31,6 +31,7 @@ public static class DatabaseSeeder
                     Email = "support@litepos.com",
                     MobileNumber = "9876543210",
                     Website = "https://litepos.local",
+                    LogoStorageKey = "https://images.unsplash.com/photo-1559925393-8be0ec4767c8?w=200&auto=format&fit=crop&q=80",
                     IsActive = true,
                     CreatedAtUtc = DateTime.UtcNow
                 };
@@ -276,6 +277,7 @@ public static class DatabaseSeeder
                         Category = coffeeCat,
                         ProductName = "Cappuccino",
                         Description = "Espresso with steamed milk foam and cocoa powder",
+                        ProductImageStorageKey = "https://images.unsplash.com/photo-1572442388796-11668a67e53d?w=400&auto=format&fit=crop&q=80",
                         SellingPrice = 120.00m,
                         TaxPercentage = 5.0m,
                         HSNCode = "0901",
@@ -289,6 +291,7 @@ public static class DatabaseSeeder
                         Category = bevCat,
                         ProductName = "Tea",
                         Description = "Traditional hot spiced milk tea",
+                        ProductImageStorageKey = "https://images.unsplash.com/photo-1544787219-7f47ccb76574?w=400&auto=format&fit=crop&q=80",
                         SellingPrice = 30.00m,
                         TaxPercentage = 5.0m,
                         HSNCode = "0902",
@@ -302,6 +305,7 @@ public static class DatabaseSeeder
                         Category = snackCat,
                         ProductName = "Sandwich",
                         Description = "Grilled vegetable sandwich with mint chutney",
+                        ProductImageStorageKey = "https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=400&auto=format&fit=crop&q=80",
                         SellingPrice = 100.00m,
                         TaxPercentage = 5.0m,
                         HSNCode = "1905",
@@ -315,6 +319,7 @@ public static class DatabaseSeeder
                         Category = bevCat,
                         ProductName = "Milkshake",
                         Description = "Thick chocolate and vanilla milkshake",
+                        ProductImageStorageKey = "https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=400&auto=format&fit=crop&q=80",
                         SellingPrice = 90.00m,
                         TaxPercentage = 5.0m,
                         HSNCode = "2202",
@@ -328,6 +333,7 @@ public static class DatabaseSeeder
                         Category = iceCat,
                         ProductName = "Vanilla Ice Cream",
                         Description = "Classic creamy vanilla scoop",
+                        ProductImageStorageKey = "https://images.unsplash.com/photo-1501443762994-82bd5dace89a?w=400&auto=format&fit=crop&q=80",
                         SellingPrice = 70.00m,
                         TaxPercentage = 18.0m,
                         HSNCode = "2105",
@@ -341,6 +347,7 @@ public static class DatabaseSeeder
                         Category = dessertCat,
                         ProductName = "Chocolate Brownie",
                         Description = "Rich fudge brownie with chocolate chips",
+                        ProductImageStorageKey = "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=400&auto=format&fit=crop&q=80",
                         SellingPrice = 110.00m,
                         TaxPercentage = 18.0m,
                         HSNCode = "1905",
@@ -353,6 +360,42 @@ public static class DatabaseSeeder
                 await context.Products.AddRangeAsync(products, cancellationToken);
                 await context.SaveChangesAsync(cancellationToken);
                 logger.LogInformation("Seeded 5 default Categories and 6 specification Products.");
+            }
+
+            // Backfill Company Logo if missing
+            if (string.IsNullOrEmpty(company.LogoStorageKey))
+            {
+                company.LogoStorageKey = "https://images.unsplash.com/photo-1559925393-8be0ec4767c8?w=200&auto=format&fit=crop&q=80";
+                context.Companies.Update(company);
+                await context.SaveChangesAsync(cancellationToken);
+            }
+
+            // Backfill Product Images if missing
+            var existingProducts = await context.Products.ToListAsync(cancellationToken);
+            var imageMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "Cappuccino", "https://images.unsplash.com/photo-1572442388796-11668a67e53d?w=400&auto=format&fit=crop&q=80" },
+                { "Tea", "https://images.unsplash.com/photo-1544787219-7f47ccb76574?w=400&auto=format&fit=crop&q=80" },
+                { "Sandwich", "https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=400&auto=format&fit=crop&q=80" },
+                { "Milkshake", "https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=400&auto=format&fit=crop&q=80" },
+                { "Vanilla Ice Cream", "https://images.unsplash.com/photo-1501443762994-82bd5dace89a?w=400&auto=format&fit=crop&q=80" },
+                { "Chocolate Brownie", "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=400&auto=format&fit=crop&q=80" }
+            };
+
+            bool updatedAny = false;
+            foreach (var p in existingProducts)
+            {
+                if (string.IsNullOrEmpty(p.ProductImageStorageKey) && imageMap.TryGetValue(p.ProductName, out var imgUrl))
+                {
+                    p.ProductImageStorageKey = imgUrl;
+                    context.Products.Update(p);
+                    updatedAny = true;
+                }
+            }
+            if (updatedAny)
+            {
+                await context.SaveChangesAsync(cancellationToken);
+                logger.LogInformation("Enriched existing products with catalog images.");
             }
 
             logger.LogInformation("Database seeded successfully.");

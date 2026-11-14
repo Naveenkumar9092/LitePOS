@@ -1,4 +1,5 @@
 import "package:flutter/material.dart";
+import "package:billing_pos_app/core/constants/api_endpoints.dart";
 import "package:billing_pos_app/core/theme/app_colors.dart";
 import "package:billing_pos_app/core/utilities/currency_formatter.dart";
 import "package:billing_pos_app/shared/widgets/app_card.dart";
@@ -27,6 +28,7 @@ class ProductCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Top Row: Category Badge + Status Badge
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -51,7 +53,20 @@ class ProductCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
+
+          // Product Image Banner / Thumbnail
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              height: 100,
+              width: double.infinity,
+              color: Colors.grey.shade100,
+              child: _buildProductImage(product.productImageStorageKey),
+            ),
+          ),
+          const SizedBox(height: 10),
+
           Text(
             product.productName,
             style: const TextStyle(
@@ -122,11 +137,35 @@ class ProductCard extends StatelessWidget {
           if (product.taxPercentage > 0 || (product.hsnCode != null && product.hsnCode!.isNotEmpty)) ...[
             const SizedBox(height: 4),
             Text(
-              "GST ${product.taxPercentage.toStringAsFixed(0)}%${product.hsnCode != null && product.hsnCode!.isNotEmpty ? '  â€¢  HSN: ${product.hsnCode}' : ''}",
+              "GST ${product.taxPercentage.toStringAsFixed(0)}%${product.hsnCode != null && product.hsnCode!.isNotEmpty ? '  •  HSN: ${product.hsnCode}' : ''}",
               style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildProductImage(String? keyOrUrl) {
+    if (keyOrUrl != null && keyOrUrl.isNotEmpty) {
+      final url = keyOrUrl.startsWith("http")
+          ? keyOrUrl
+          : "${ApiEndpoints.baseUrl.replaceAll("/api/v1", "")}$keyOrUrl";
+      return Image.network(
+        url,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
+      );
+    }
+    return _buildPlaceholder();
+  }
+
+  Widget _buildPlaceholder() {
+    return Center(
+      child: Icon(
+        Icons.restaurant_menu,
+        size: 36,
+        color: AppColors.primary.withValues(alpha: 0.35),
       ),
     );
   }

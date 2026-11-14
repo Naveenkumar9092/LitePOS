@@ -2,6 +2,7 @@ import "dart:async";
 import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:intl/intl.dart";
+import "package:billing_pos_app/core/constants/api_endpoints.dart";
 import "package:billing_pos_app/core/theme/app_colors.dart";
 import "package:billing_pos_app/core/utilities/currency_formatter.dart";
 import "package:billing_pos_app/core/utilities/responsive_layout.dart";
@@ -494,16 +495,32 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
                 ],
               ),
 
-              // Product Name
-              Text(
-                product.productName,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                  color: isAvailable ? AppColors.textPrimary : Colors.grey.shade500,
-                ),
+              // Product Thumbnail + Name
+              Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      color: Colors.grey.shade100,
+                      child: _buildPosProductThumbnail(product.productImageStorageKey),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      product.productName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: isAvailable ? AppColors.textPrimary : Colors.grey.shade500,
+                      ),
+                    ),
+                  ),
+                ],
               ),
 
               // Bottom Price
@@ -762,6 +779,20 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildPosProductThumbnail(String? keyOrUrl) {
+    if (keyOrUrl != null && keyOrUrl.isNotEmpty) {
+      final url = keyOrUrl.startsWith("http")
+          ? keyOrUrl
+          : "${ApiEndpoints.baseUrl.replaceAll("/api/v1", "")}$keyOrUrl";
+      return Image.network(
+        url,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => const Icon(Icons.fastfood, size: 20, color: AppColors.primary),
+      );
+    }
+    return const Icon(Icons.fastfood, size: 20, color: AppColors.primary);
   }
 }
 

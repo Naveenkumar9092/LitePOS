@@ -1,6 +1,7 @@
 import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:go_router/go_router.dart";
+import "../../../core/constants/api_endpoints.dart";
 import "../../../core/routing/route_names.dart";
 import "../../../core/theme/app_colors.dart";
 import "../../../shared/widgets/app_button.dart";
@@ -82,13 +83,34 @@ class CompanyProfileScreen extends ConsumerWidget {
       backgroundColor: AppColors.primaryContainer,
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.primary,
-              borderRadius: BorderRadius.circular(10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4),
+                ],
+              ),
+              child: profile.logoStorageKey != null && profile.logoStorageKey!.isNotEmpty
+                  ? Image.network(
+                      profile.logoStorageKey!.startsWith("http")
+                          ? profile.logoStorageKey!
+                          : "${ApiEndpoints.baseUrl.replaceAll("/api/v1", "")}${profile.logoStorageKey!}",
+                      fit: BoxFit.cover,
+                      errorBuilder: (c, e, s) => Container(
+                        color: AppColors.primary,
+                        child: const Icon(Icons.store, color: Colors.white, size: 32),
+                      ),
+                    )
+                  : Container(
+                      color: AppColors.primary,
+                      child: const Icon(Icons.store, color: Colors.white, size: 32),
+                    ),
             ),
-            child: const Icon(Icons.store, color: Colors.white, size: 36),
           ),
           const SizedBox(width: 16),
           Expanded(

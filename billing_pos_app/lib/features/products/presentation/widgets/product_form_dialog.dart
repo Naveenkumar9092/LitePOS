@@ -23,6 +23,7 @@ class _ProductFormDialogState extends ConsumerState<ProductFormDialog> {
   late TextEditingController _descController;
   late TextEditingController _hsnController;
   late TextEditingController _taxController;
+  late TextEditingController _imageUrlController;
 
   int? _selectedCategoryId;
   bool _isAvailable = true;
@@ -37,6 +38,7 @@ class _ProductFormDialogState extends ConsumerState<ProductFormDialog> {
     _descController = TextEditingController(text: p?.description ?? "");
     _hsnController = TextEditingController(text: p?.hsnCode ?? "");
     _taxController = TextEditingController(text: p != null ? p.taxPercentage.toString() : "5.0");
+    _imageUrlController = TextEditingController(text: p?.productImageStorageKey ?? "");
     _selectedCategoryId = p?.categoryId;
     _isAvailable = p?.isAvailable ?? true;
   }
@@ -48,6 +50,7 @@ class _ProductFormDialogState extends ConsumerState<ProductFormDialog> {
     _descController.dispose();
     _hsnController.dispose();
     _taxController.dispose();
+    _imageUrlController.dispose();
     super.dispose();
   }
 
@@ -69,6 +72,7 @@ class _ProductFormDialogState extends ConsumerState<ProductFormDialog> {
       "categoryId": _selectedCategoryId,
       "productName": _nameController.text.trim(),
       "description": _descController.text.trim().isEmpty ? null : _descController.text.trim(),
+      "productImageStorageKey": _imageUrlController.text.trim().isEmpty ? null : _imageUrlController.text.trim(),
       "sellingPrice": price,
       "taxPercentage": tax,
       "hsnCode": _hsnController.text.trim().isEmpty ? null : _hsnController.text.trim(),
@@ -217,6 +221,36 @@ class _ProductFormDialogState extends ConsumerState<ProductFormDialog> {
                           controller: _hsnController,
                           hint: "e.g. 0901, 1905",
                         ),
+                        const SizedBox(height: 16),
+                        // Product Image URL
+                        AppTextField(
+                          label: "Product Image URL / Storage Key",
+                          controller: _imageUrlController,
+                          hint: "https://... or /uploads/products/image.jpg",
+                          onChanged: (_) => setState(() {}),
+                        ),
+                        if (_imageUrlController.text.trim().isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(6),
+                                child: Container(
+                                  width: 44,
+                                  height: 44,
+                                  color: Colors.grey.shade100,
+                                  child: Image.network(
+                                    _imageUrlController.text.trim(),
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (c, e, s) => const Icon(Icons.broken_image, size: 22, color: Colors.grey),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              const Text("Image preview active", style: TextStyle(fontSize: 12, color: AppColors.success, fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ],
                         const SizedBox(height: 16),
                         // Description
                         AppTextField(
