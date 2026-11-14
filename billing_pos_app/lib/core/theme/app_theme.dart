@@ -22,6 +22,27 @@ class AppTheme {
       ),
       scaffoldBackgroundColor: AppColors.backgroundLight,
       textTheme: AppTypography.textTheme,
+      scrollbarTheme: ScrollbarThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.hovered) || states.contains(WidgetState.dragged)) {
+            return AppColors.primaryDark;
+          }
+          return AppColors.primary.withValues(alpha: 0.55);
+        }),
+        trackColor: WidgetStateProperty.all(const Color(0x1524B1B1)),
+        trackBorderColor: WidgetStateProperty.all(Colors.transparent),
+        radius: const Radius.circular(8),
+        thickness: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.hovered) || states.contains(WidgetState.dragged)) {
+            return 8.0;
+          }
+          return 6.0;
+        }),
+        interactive: true,
+        crossAxisMargin: 2.0,
+        mainAxisMargin: 4.0,
+        minThumbLength: 44.0,
+      ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: Colors.white,
         indicatorColor: AppColors.primaryContainer,
@@ -136,6 +157,27 @@ class AppTheme {
           borderRadius: BorderRadius.circular(12),
           side: const BorderSide(color: AppColors.outlineDark, width: 1),
         ),
+      ),
+      scrollbarTheme: ScrollbarThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.hovered) || states.contains(WidgetState.dragged)) {
+            return AppColors.primary;
+          }
+          return AppColors.primary.withValues(alpha: 0.45);
+        }),
+        trackColor: WidgetStateProperty.all(Colors.white.withValues(alpha: 0.05)),
+        trackBorderColor: WidgetStateProperty.all(Colors.transparent),
+        radius: const Radius.circular(8),
+        thickness: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.hovered) || states.contains(WidgetState.dragged)) {
+            return 8.0;
+          }
+          return 6.0;
+        }),
+        interactive: true,
+        crossAxisMargin: 2.0,
+        mainAxisMargin: 4.0,
+        minThumbLength: 44.0,
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: AppColors.surfaceDark,

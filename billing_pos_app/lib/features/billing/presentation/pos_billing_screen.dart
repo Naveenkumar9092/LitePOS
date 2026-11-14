@@ -29,6 +29,10 @@ class PosBillingScreen extends ConsumerStatefulWidget {
 
 class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _productsScrollController = ScrollController();
+  final ScrollController _cartScrollController = ScrollController();
+  final ScrollController _categoryNavScrollController = ScrollController();
+  final ScrollController _categoryBarScrollController = ScrollController();
   int? _selectedCategoryId;
   late Timer _clockTimer;
   DateTime _currentTime = DateTime.now();
@@ -49,6 +53,10 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
   void dispose() {
     _clockTimer.cancel();
     _searchController.dispose();
+    _productsScrollController.dispose();
+    _cartScrollController.dispose();
+    _categoryNavScrollController.dispose();
+    _categoryBarScrollController.dispose();
     super.dispose();
   }
 
@@ -617,19 +625,28 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
           ),
           const Divider(height: 1, color: Color(0xFFE2E8F0)),
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              children: [
-                _buildCategoryTile(null, "All Items", Icons.grid_view_rounded),
-                ...categoryState.categories.where((c) => c.isActive).map((cat) {
-                  return _buildCategoryTile(
-                    cat.categoryId,
-                    cat.categoryName,
-                    _getCategoryIcon(cat.categoryName),
-                    count: cat.productCount,
-                  );
-                }),
-              ],
+            child: RawScrollbar(
+              controller: _categoryNavScrollController,
+              thumbVisibility: false,
+              interactive: true,
+              thumbColor: AppColors.primary.withValues(alpha: 0.45),
+              thickness: 4,
+              radius: const Radius.circular(8),
+              child: ListView(
+                controller: _categoryNavScrollController,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                children: [
+                  _buildCategoryTile(null, "All Items", Icons.grid_view_rounded),
+                  ...categoryState.categories.where((c) => c.isActive).map((cat) {
+                    return _buildCategoryTile(
+                      cat.categoryId,
+                      cat.categoryName,
+                      _getCategoryIcon(cat.categoryName),
+                      count: cat.productCount,
+                    );
+                  }),
+                ],
+              ),
             ),
           ),
         ],
@@ -717,6 +734,7 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
 
   Widget _buildCategoryHorizontalBar(CategoryState categoryState) {
     return ListView(
+      controller: _categoryBarScrollController,
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       children: [
@@ -861,20 +879,30 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
                                 : (constraints.maxWidth > 580 ? 3 : 2));
                         // Compact card aspect ratio: 1.25 gives ergonomic ~145-165px height (not tall)
                         final childAspectRatio = constraints.maxWidth > 850 ? 1.26 : 1.22;
-                        return GridView.builder(
-                          padding: const EdgeInsets.all(12),
-                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: crossAxisCount,
-                            crossAxisSpacing: 10,
-                            mainAxisSpacing: 10,
-                            childAspectRatio: childAspectRatio,
+                        return RawScrollbar(
+                          controller: _productsScrollController,
+                          thumbVisibility: true,
+                          interactive: true,
+                          thumbColor: AppColors.primary.withValues(alpha: 0.65),
+                          thickness: 6,
+                          radius: const Radius.circular(8),
+                          minThumbLength: 48,
+                          child: GridView.builder(
+                            controller: _productsScrollController,
+                            padding: const EdgeInsets.all(12),
+                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: crossAxisCount,
+                              crossAxisSpacing: 10,
+                              mainAxisSpacing: 10,
+                              childAspectRatio: childAspectRatio,
+                            ),
+                            itemCount: products.length,
+                            itemBuilder: (context, index) {
+                              final product = products[index];
+                              final qtyInCart = cartItemCounts[product.id] ?? 0;
+                              return _buildPosProductCard(product, qtyInCart);
+                            },
                           ),
-                          itemCount: products.length,
-                          itemBuilder: (context, index) {
-                            final product = products[index];
-                            final qtyInCart = cartItemCounts[product.id] ?? 0;
-                            return _buildPosProductCard(product, qtyInCart);
-                          },
                         );
                       },
                     ),
@@ -1232,11 +1260,20 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
                       ],
                     ),
                   )
-                : ListView.separated(
-                    padding: const EdgeInsets.all(10),
-                    itemCount: cart.items.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) {
+                : RawScrollbar(
+                    controller: _cartScrollController,
+                    thumbVisibility: true,
+                    interactive: true,
+                    thumbColor: AppColors.primary.withValues(alpha: 0.6),
+                    thickness: 5,
+                    radius: const Radius.circular(8),
+                    minThumbLength: 40,
+                    child: ListView.separated(
+                      controller: _cartScrollController,
+                      padding: const EdgeInsets.all(10),
+                      itemCount: cart.items.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
                       final item = cart.items[index];
                       return Container(
                         padding: const EdgeInsets.all(10),
@@ -1338,6 +1375,7 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
                       );
                     },
                   ),
+                ),
           ),
 
           // Settlement Summary Box
