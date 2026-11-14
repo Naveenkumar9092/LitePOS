@@ -30,6 +30,11 @@ final GoRouter appRouter = GoRouter(
       path: RouteNames.login,
       builder: (context, state) => const LoginScreen(),
     ),
+    GoRoute(
+      path: RouteNames.posBilling,
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const PosBillingScreen(),
+    ),
     ShellRoute(
       navigatorKey: _shellNavigatorKey,
       builder: (context, state, child) => FoundationShell(child: child),
@@ -57,10 +62,6 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: RouteNames.users,
           builder: (context, state) => const UserManagementScreen(),
-        ),
-        GoRoute(
-          path: RouteNames.posBilling,
-          builder: (context, state) => const PosBillingScreen(),
         ),
         GoRoute(
           path: RouteNames.orders,

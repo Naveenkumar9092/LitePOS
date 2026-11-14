@@ -1,9 +1,11 @@
 import "dart:async";
 import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
+import "package:go_router/go_router.dart";
 import "package:google_fonts/google_fonts.dart";
 import "package:intl/intl.dart";
 import "package:billing_pos_app/core/constants/api_endpoints.dart";
+import "package:billing_pos_app/core/routing/route_names.dart";
 import "package:billing_pos_app/core/theme/app_colors.dart";
 import "package:billing_pos_app/core/utilities/currency_formatter.dart";
 import "package:billing_pos_app/shared/widgets/app_loader.dart";
@@ -50,6 +52,25 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
       context: context,
       builder: (_) => const HeldBillsDialog(),
     );
+  }
+
+  void _navigateToDashboard(AuthState authState) {
+    final user = authState.user;
+    if (user != null) {
+      if (user.isCashier) {
+        context.go(RouteNames.cashierDashboard);
+      } else if (user.isSAdmin) {
+        context.go(RouteNames.sadminDashboard);
+      } else {
+        context.go(RouteNames.adminDashboard);
+      }
+    } else {
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go(RouteNames.cashierDashboard);
+      }
+    }
   }
 
   Future<void> _handleHoldBill() async {
@@ -341,67 +362,75 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
       return true;
     }).toList();
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF1F7F9),
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(66),
-        child: _buildHeader(authState, billingState),
-      ),
-      body: isTabletOrDesktop
-          ? Row(
-              children: [
-                // Left Panel: Vertical Category List (Wide Desktop >= 1150)
-                if (isWideDesktop) ...[
-                  SizedBox(
-                    width: 210,
-                    child: _buildCategoryList(categoryState),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          _navigateToDashboard(authState);
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF1F7F9),
+        appBar: PreferredSize(
+          preferredSize: const Size.fromHeight(66),
+          child: _buildHeader(authState, billingState),
+        ),
+        body: isTabletOrDesktop
+            ? Row(
+                children: [
+                  // Left Panel: Vertical Category List (Wide Desktop >= 1150)
+                  if (isWideDesktop) ...[
+                    SizedBox(
+                      width: 210,
+                      child: _buildCategoryList(categoryState),
+                    ),
+                    const VerticalDivider(width: 1, color: Color(0xFFE2E8F0)),
+                  ],
+
+                  // Center Panel: Modern Product Grid (with top Category horizontal pills on tablet)
+                  Expanded(
+                    child: Column(
+                      children: [
+                        if (!isWideDesktop)
+                          Container(
+                            color: Colors.white,
+                            height: 50,
+                            child: _buildCategoryHorizontalBar(categoryState),
+                          ),
+                        if (!isWideDesktop)
+                          const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                        Expanded(
+                          child: _buildProductCatalog(products, productState.isLoading, cartState),
+                        ),
+                      ],
+                    ),
                   ),
                   const VerticalDivider(width: 1, color: Color(0xFFE2E8F0)),
-                ],
 
-                // Center Panel: Modern Product Grid (with top Category horizontal pills on tablet)
-                Expanded(
-                  child: Column(
-                    children: [
-                      if (!isWideDesktop)
-                        Container(
-                          color: Colors.white,
-                          height: 50,
-                          child: _buildCategoryHorizontalBar(categoryState),
-                        ),
-                      if (!isWideDesktop)
-                        const Divider(height: 1, color: Color(0xFFE2E8F0)),
-                      Expanded(
-                        child: _buildProductCatalog(products, productState.isLoading, cartState),
-                      ),
-                    ],
+                  // Right Panel: Active Order Cart & Settlement Box (Visible on Tablet & Desktop)
+                  SizedBox(
+                    width: screenWidth > 1200 ? 410 : (screenWidth > 950 ? 370 : 330),
+                    child: _buildCartPanel(cartState, billingState.isProcessing),
                   ),
-                ),
-                const VerticalDivider(width: 1, color: Color(0xFFE2E8F0)),
-
-                // Right Panel: Active Order Cart & Settlement Box (Visible on Tablet & Desktop)
-                SizedBox(
-                  width: screenWidth > 950 ? 380 : 330,
-                  child: _buildCartPanel(cartState, billingState.isProcessing),
-                ),
-              ],
-            )
-          : Column(
-              children: [
-                // Category Pills for Mobile (< 700px)
-                Container(
-                  color: Colors.white,
-                  height: 52,
-                  child: _buildCategoryHorizontalBar(categoryState),
-                ),
-                const Divider(height: 1, color: Color(0xFFE2E8F0)),
-                Expanded(
-                  child: _buildProductCatalog(products, productState.isLoading, cartState),
-                ),
-                const Divider(height: 1, color: Color(0xFFE2E8F0)),
-                _buildMobileCartSummary(cartState),
-              ],
-            ),
+                ],
+              )
+            : Column(
+                children: [
+                  // Category Pills for Mobile (< 700px)
+                  Container(
+                    color: Colors.white,
+                    height: 52,
+                    child: _buildCategoryHorizontalBar(categoryState),
+                  ),
+                  const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                  Expanded(
+                    child: _buildProductCatalog(products, productState.isLoading, cartState),
+                  ),
+                  const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                  _buildMobileCartSummary(cartState),
+                ],
+              ),
+      ),
     );
   }
 
@@ -420,6 +449,46 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
         bottom: false,
         child: Row(
           children: [
+            // Back to Dashboard Button
+            Tooltip(
+              message: "Back to Dashboard",
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () => _navigateToDashboard(authState),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F7F9),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFCCE4E9), width: 1.2),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.arrow_back_rounded,
+                          color: AppColors.primaryDark,
+                          size: 19,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          "Dashboard",
+                          style: GoogleFonts.dmSans(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                            color: AppColors.primaryDark,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+
             // Store Logo & Terminal Identifier
             Container(
               padding: const EdgeInsets.all(8),

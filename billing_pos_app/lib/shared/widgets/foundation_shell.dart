@@ -253,6 +253,11 @@ class _FoundationShellState extends ConsumerState<FoundationShell> {
 
   @override
   Widget build(BuildContext context) {
+    final location = GoRouterState.of(context).uri.toString();
+    if (location.startsWith(RouteNames.posBilling)) {
+      return widget.child;
+    }
+
     final authState = ref.watch(authNotifierProvider);
     final user = authState.user;
     final isCashier = user?.isCashier ?? false;
