@@ -6,7 +6,6 @@ import "package:intl/intl.dart";
 import "package:billing_pos_app/core/constants/api_endpoints.dart";
 import "package:billing_pos_app/core/theme/app_colors.dart";
 import "package:billing_pos_app/core/utilities/currency_formatter.dart";
-import "package:billing_pos_app/core/utilities/responsive_layout.dart";
 import "package:billing_pos_app/shared/widgets/app_loader.dart";
 import "../../authentication/presentation/auth_state.dart";
 import "../../categories/presentation/category_state.dart";
@@ -339,7 +338,9 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
     final billingState = ref.watch(billingNotifierProvider);
     final authState = ref.watch(authNotifierProvider);
 
-    final isDesktop = ResponsiveLayout.isDesktop(context);
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isTabletOrDesktop = screenWidth >= 700;
+    final isWideDesktop = screenWidth >= 1150;
 
     // Filter products by selected category and search query
     final products = productState.products.where((p) {
@@ -361,33 +362,48 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
         preferredSize: const Size.fromHeight(66),
         child: _buildHeader(authState, billingState),
       ),
-      body: isDesktop
+      body: isTabletOrDesktop
           ? Row(
               children: [
-                // Left Panel: Category Filter
-                SizedBox(
-                  width: 215,
-                  child: _buildCategoryList(categoryState),
-                ),
-                const VerticalDivider(width: 1, color: Color(0xFFE2E8F0)),
+                // Left Panel: Vertical Category List (Wide Desktop >= 1150)
+                if (isWideDesktop) ...[
+                  SizedBox(
+                    width: 210,
+                    child: _buildCategoryList(categoryState),
+                  ),
+                  const VerticalDivider(width: 1, color: Color(0xFFE2E8F0)),
+                ],
 
-                // Center Panel: Modern Product Grid
+                // Center Panel: Modern Product Grid (with top Category horizontal pills on tablet)
                 Expanded(
-                  flex: 5,
-                  child: _buildProductCatalog(products, productState.isLoading, cartState),
+                  child: Column(
+                    children: [
+                      if (!isWideDesktop)
+                        Container(
+                          color: Colors.white,
+                          height: 50,
+                          child: _buildCategoryHorizontalBar(categoryState),
+                        ),
+                      if (!isWideDesktop)
+                        const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                      Expanded(
+                        child: _buildProductCatalog(products, productState.isLoading, cartState),
+                      ),
+                    ],
+                  ),
                 ),
                 const VerticalDivider(width: 1, color: Color(0xFFE2E8F0)),
 
-                // Right Panel: Active Order Cart & Settlement Box
+                // Right Panel: Active Order Cart & Settlement Box (Visible on Tablet & Desktop)
                 SizedBox(
-                  width: 395,
+                  width: screenWidth > 950 ? 380 : 330,
                   child: _buildCartPanel(cartState, billingState.isProcessing),
                 ),
               ],
             )
           : Column(
               children: [
-                // Category Pills for Mobile/Tablet
+                // Category Pills for Mobile (< 700px)
                 Container(
                   color: Colors.white,
                   height: 52,
@@ -419,7 +435,10 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
       ),
       child: SafeArea(
         bottom: false,
-        child: Row(
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: Row(
           children: [
             // Store Logo & Terminal Identifier
             Container(
@@ -573,6 +592,7 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
               ),
             ),
           ],
+        ),
         ),
       ),
     );
