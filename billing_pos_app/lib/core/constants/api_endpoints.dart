@@ -1,5 +1,7 @@
 class ApiEndpoints {
-  static const String baseUrl = "http://localhost:5000/api/v1";
+  static const String cloudBaseUrl = "https://litepos.onrender.com/api/v1";
+  static const String localBaseUrl = "http://localhost:5000/api/v1";
+  static const String baseUrl = cloudBaseUrl;
 
   // Health
   static const String health = "/health";
