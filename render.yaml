@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: litepos-api
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: singapore
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: EnableSwagger
+        value: "true"
+      - key: DatabaseProvider
+        value: Sqlite
+      - key: ConnectionStrings__SqliteConnection
+        value: "Data Source=LitePOS_Cloud.db"
+      - key: JwtSettings__Secret
+        generateValue: true
+      - key: JwtSettings__Issuer
+        value: LitePOS.Api
+      - key: JwtSettings__Audience
+        value: LitePOS.Client
+

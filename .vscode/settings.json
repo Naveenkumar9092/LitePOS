@@ -1,0 +1,10 @@
+{
+  "dart.flutterSdkPath": "F:\\flutter",
+  "files.exclude": {
+    "**/billing_pos_app/flutter": true
+  },
+  "search.exclude": {
+    "**/billing_pos_app/flutter": true
+  }
+}
+

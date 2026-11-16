@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="BillingPOS.Api/BillingPOS.Api.csproj" />
+  <Project Path="BillingPOS.Application/BillingPOS.Application.csproj" />
+  <Project Path="BillingPOS.Domain/BillingPOS.Domain.csproj" />
+  <Project Path="BillingPOS.Infrastructure/BillingPOS.Infrastructure.csproj" />
+  <Project Path="BillingPOS.Tests/BillingPOS.Tests.csproj" />
+</Solution>
