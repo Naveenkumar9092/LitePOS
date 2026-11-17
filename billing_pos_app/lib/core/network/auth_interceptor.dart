@@ -6,6 +6,8 @@ import "../storage/storage_service.dart";
 class AuthInterceptor extends Interceptor {
   final IStorageService _storageService;
   static bool _isAuthenticating = false;
+  static DateTime? _lastAuthAttempt;
+  static bool _lastAuthFailed = false;
 
   AuthInterceptor(this._storageService);
 
@@ -16,13 +18,22 @@ class AuthInterceptor extends Interceptor {
     }
 
     if (_isAuthenticating) return null;
+
+    // Cooldown: When offline, do not spam authentication requests for every background call
+    if (_lastAuthFailed && _lastAuthAttempt != null) {
+      if (DateTime.now().difference(_lastAuthAttempt!) < const Duration(seconds: 30)) {
+        return null;
+      }
+    }
+
     _isAuthenticating = true;
+    _lastAuthAttempt = DateTime.now();
 
     try {
       final dio = Dio(BaseOptions(
         baseUrl: ApiEndpoints.baseUrl,
-        connectTimeout: const Duration(seconds: 4),
-        receiveTimeout: const Duration(seconds: 4),
+        connectTimeout: const Duration(seconds: 3),
+        receiveTimeout: const Duration(seconds: 3),
       ));
       final res = await dio.post(
         ApiEndpoints.login,
@@ -40,10 +51,13 @@ class AuthInterceptor extends Interceptor {
           if (refresh != null) {
             await _storageService.write(AppConstants.refreshTokenKey, refresh);
           }
+          _lastAuthFailed = false;
           return cloudToken;
         }
       }
+      _lastAuthFailed = true;
     } catch (_) {
+      _lastAuthFailed = true;
     } finally {
       _isAuthenticating = false;
     }
