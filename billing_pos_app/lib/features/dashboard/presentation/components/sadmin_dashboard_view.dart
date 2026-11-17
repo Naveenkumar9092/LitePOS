@@ -49,12 +49,18 @@ class SAdminDashboardView extends ConsumerWidget {
         final isDesktop = constraints.maxWidth > 900;
         final isMobile = constraints.maxWidth < 650;
 
-        return SingleChildScrollView(
-          padding: EdgeInsets.symmetric(
-            horizontal: isMobile ? 12 : 22,
-            vertical: isMobile ? 14 : 20,
-          ),
-          child: Column(
+        return RefreshIndicator(
+          color: AppColors.neonPurple,
+          onRefresh: () async {
+            ref.invalidate(sadminDashboardProvider);
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 12 : 22,
+              vertical: isMobile ? 14 : 20,
+            ),
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildShopProfileHeader(context, data.shop, isMobile),
@@ -97,7 +103,8 @@ class SAdminDashboardView extends ConsumerWidget {
                 ),
             ],
           ),
-        );
+        ),
+      );
       },
     );
   }

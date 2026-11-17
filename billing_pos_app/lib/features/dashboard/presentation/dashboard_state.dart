@@ -16,21 +16,21 @@ final dashboardDateFilterProvider = StateProvider<DateTime?>((ref) => null);
 // Selected Period Filter (today, week, month)
 final dashboardPeriodFilterProvider = StateProvider<String>((ref) => "today");
 
-// SAdmin Dashboard Provider (Persistent in-memory cache)
-final sadminDashboardProvider = FutureProvider<SAdminDashboardModel>((ref) async {
+// SAdmin Dashboard Provider (Auto-refresh on screen entry or pull-to-refresh)
+final sadminDashboardProvider = FutureProvider.autoDispose<SAdminDashboardModel>((ref) async {
   final repo = ref.watch(dashboardRepositoryProvider);
   return repo.getSAdminDashboard();
 });
 
-// Admin Dashboard Provider (Persistent in-memory cache)
-final adminDashboardProvider = FutureProvider<AdminDashboardModel>((ref) async {
+// Admin Dashboard Provider (Auto-refresh on screen entry or pull-to-refresh)
+final adminDashboardProvider = FutureProvider.autoDispose<AdminDashboardModel>((ref) async {
   final repo = ref.watch(dashboardRepositoryProvider);
   final date = ref.watch(dashboardDateFilterProvider);
   return repo.getAdminDashboard(date: date);
 });
 
-// Cashier Dashboard Provider (Persistent in-memory cache)
-final cashierDashboardProvider = FutureProvider<CashierDashboardModel>((ref) async {
+// Cashier Dashboard Provider (Auto-refresh on screen entry or pull-to-refresh)
+final cashierDashboardProvider = FutureProvider.autoDispose<CashierDashboardModel>((ref) async {
   final repo = ref.watch(dashboardRepositoryProvider);
   final auth = ref.watch(authNotifierProvider);
   final date = ref.watch(dashboardDateFilterProvider);

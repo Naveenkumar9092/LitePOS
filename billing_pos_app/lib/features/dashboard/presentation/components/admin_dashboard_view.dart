@@ -53,12 +53,18 @@ class AdminDashboardView extends ConsumerWidget {
         final isDesktop = constraints.maxWidth > 950;
         final isMobile = constraints.maxWidth < 650;
 
-        return SingleChildScrollView(
-          padding: EdgeInsets.symmetric(
-            horizontal: isMobile ? 12 : 22,
-            vertical: isMobile ? 14 : 20,
-          ),
-          child: Column(
+        return RefreshIndicator(
+          color: AppColors.primary,
+          onRefresh: () async {
+            ref.invalidate(adminDashboardProvider);
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 12 : 22,
+              vertical: isMobile ? 14 : 20,
+            ),
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildFilterBar(context, ref, isMobile),
@@ -109,7 +115,8 @@ class AdminDashboardView extends ConsumerWidget {
                 ),
             ],
           ),
-        );
+        ),
+      );
       },
     );
   }

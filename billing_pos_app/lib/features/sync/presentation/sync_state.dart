@@ -100,8 +100,8 @@ class SyncNotifier extends StateNotifier<SyncState> {
     state = state.copyWith(isSyncing: true, errorMessage: null, successMessage: null);
 
     try {
-      // 1. Push offline records
-      await _repository.pushBatch(
+      // 1. Push all offline records (categories, products, invoices, customers)
+      await _repository.syncAllPendingOutbox(
         deviceId: _currentDeviceId,
         appVersion: "1.0.0",
       );

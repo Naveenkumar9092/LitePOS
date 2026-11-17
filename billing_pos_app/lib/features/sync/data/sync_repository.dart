@@ -1,3 +1,4 @@
+import "dart:convert";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:sqflite/sqflite.dart";
 import "package:uuid/uuid.dart";
@@ -283,10 +284,92 @@ class SyncRepository {
       final count = Sqflite.firstIntValue(await db.rawQuery(
         "SELECT COUNT(*) FROM ${DatabaseTables.localInvoice} WHERE SyncStatus = 0 AND InvoiceStatus != 3",
       ));
-      return count ?? 0;
+      final outboxPending = Sqflite.firstIntValue(await db.rawQuery(
+        "SELECT COUNT(*) FROM ${DatabaseTables.localSyncOutbox} WHERE SyncStatus = 1",
+      )) ?? 0;
+      return (count ?? 0) + outboxPending;
     } catch (_) {
       return 0;
     }
+  }
+
+  /// Complete Outbox synchronization for all offline-created entities
+  Future<int> syncAllPendingOutbox({required String deviceId, String appVersion = "1.0.0"}) async {
+    int totalSynced = 0;
+    try {
+      final db = await _db.database;
+
+      // 1. Process pending CATEGORIES in outbox
+      final pendingCats = await db.query(
+        DatabaseTables.localSyncOutbox,
+        where: "EntityType = 'CATEGORY' AND SyncStatus = 1",
+      );
+
+      for (final catRow in pendingCats) {
+        try {
+          final payload = jsonDecode(catRow["PayloadJson"] as String) as Map<String, dynamic>;
+          final res = await _dioClient.post(ApiEndpoints.categories, data: payload);
+          if (res.success && res.data != null) {
+            final serverId = (res.data["categoryId"] ?? res.data["id"] as num).toInt();
+            final clientGuid = catRow["EntityGuid"] as String;
+
+            final localRow = await db.query(
+              DatabaseTables.localCategory,
+              where: "CategoryGuid = ?",
+              whereArgs: [clientGuid],
+            );
+            if (localRow.isNotEmpty) {
+              final oldId = localRow.first["CategoryId"] as int;
+              if (oldId != serverId) {
+                await db.update(DatabaseTables.localProduct, {"CategoryId": serverId}, where: "CategoryId = ?", whereArgs: [oldId]);
+                await db.delete(DatabaseTables.localCategory, where: "CategoryId = ?", whereArgs: [oldId]);
+              }
+            }
+            await db.insert(
+              DatabaseTables.localCategory,
+              {
+                "CategoryId": serverId,
+                "CategoryGuid": clientGuid,
+                "CategoryName": payload["categoryName"],
+                "Description": payload["description"],
+                "DisplayOrder": payload["displayOrder"] ?? 0,
+                "IsActive": 1,
+              },
+              conflictAlgorithm: ConflictAlgorithm.replace,
+            );
+            await db.update(DatabaseTables.localSyncOutbox, {"SyncStatus": 3}, where: "OutboxId = ?", whereArgs: [catRow["OutboxId"]]);
+            totalSynced++;
+          }
+        } catch (_) {}
+      }
+
+      // 2. Process pending PRODUCTS in outbox
+      final pendingProds = await db.query(
+        DatabaseTables.localSyncOutbox,
+        where: "EntityType = 'PRODUCT' AND SyncStatus = 1",
+      );
+
+      for (final prodRow in pendingProds) {
+        try {
+          final payload = jsonDecode(prodRow["PayloadJson"] as String) as Map<String, dynamic>;
+          final res = await _dioClient.post(ApiEndpoints.products, data: payload);
+          if (res.success && res.data != null) {
+            final serverId = (res.data["productId"] ?? res.data["id"] as num).toInt();
+            final clientGuid = prodRow["EntityGuid"] as String;
+            await db.update(DatabaseTables.localProduct, {"ProductId": serverId}, where: "ProductGuid = ?", whereArgs: [clientGuid]);
+            await db.update(DatabaseTables.localSyncOutbox, {"SyncStatus": 3}, where: "OutboxId = ?", whereArgs: [prodRow["OutboxId"]]);
+            totalSynced++;
+          }
+        } catch (_) {}
+      }
+
+      // 3. Process pending INVOICES & CUSTOMERS via pushBatch
+      final pushRes = await pushBatch(deviceId: deviceId, appVersion: appVersion);
+      if (pushRes.success && pushRes.data != null) {
+        totalSynced += pushRes.data!.totalProcessed;
+      }
+    } catch (_) {}
+    return totalSynced;
   }
 
   Future<void> _saveLocalDeviceState(DeviceStatusModel device) async {

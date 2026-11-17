@@ -10,6 +10,7 @@ import "components/admin_dashboard_view.dart";
 import "components/cashier_dashboard_view.dart";
 import "components/offline_status_indicator.dart";
 import "components/sadmin_dashboard_view.dart";
+import "../../sync/presentation/sync_state.dart";
 import "dashboard_state.dart";
 
 class DashboardScreen extends ConsumerWidget {
@@ -18,6 +19,7 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authNotifierProvider);
+    final syncState = ref.watch(syncNotifierProvider);
     final user = authState.user;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -83,21 +85,24 @@ class DashboardScreen extends ConsumerWidget {
                 ],
               ),
               actions: [
-                const OfflineStatusIndicator(
-                  isOnline: true,
-                  pendingSyncCount: 0,
+                OfflineStatusIndicator(
+                  isOnline: syncState.isOnline,
+                  pendingSyncCount: syncState.pendingOutboxCount,
+                  onSyncTap: () {
+                    ref.read(syncNotifierProvider.notifier).syncNow();
+                    ref.invalidate(adminDashboardProvider);
+                    ref.invalidate(sadminDashboardProvider);
+                    ref.invalidate(cashierDashboardProvider);
+                  },
                 ),
                 IconButton(
                   icon: const Icon(Icons.refresh_rounded, size: 20),
                   tooltip: "Refresh Dashboard",
                   onPressed: () {
-                    if (isSAdmin) {
-                      ref.invalidate(sadminDashboardProvider);
-                    } else if (isAdmin) {
-                      ref.invalidate(adminDashboardProvider);
-                    } else {
-                      ref.invalidate(cashierDashboardProvider);
-                    }
+                    ref.invalidate(sadminDashboardProvider);
+                    ref.invalidate(adminDashboardProvider);
+                    ref.invalidate(cashierDashboardProvider);
+                    ref.read(syncNotifierProvider.notifier).checkPending();
                   },
                 ),
                 const SizedBox(width: 8),

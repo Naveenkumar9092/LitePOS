@@ -1,5 +1,7 @@
 import "dart:async";
+import "dart:convert";
 import "package:sqflite/sqflite.dart";
+import "package:uuid/uuid.dart";
 import "../../../core/constants/api_endpoints.dart";
 import "../../../core/database/app_database.dart";
 import "../../../core/database/database_tables.dart";
@@ -187,21 +189,127 @@ class ProductRepository {
 
     await _cacheProduct(localProduct);
 
+    // Save to LocalSyncOutbox for guaranteed synchronization
+    await _recordProductInOutbox(localProduct, data);
+
     // 2. Next: sync with Online DB in background
     unawaited(_syncCreateProductInBackground(localProduct, data));
 
     return localProduct;
   }
 
+  Future<void> _recordProductInOutbox(ProductModel product, Map<String, dynamic> data) async {
+    try {
+      final db = await _db.database;
+      await db.insert(
+        DatabaseTables.localSyncOutbox,
+        {
+          "EventGuid": const Uuid().v4(),
+          "IdempotencyKey": "prod-${product.productGuid}",
+          "EntityType": "PRODUCT",
+          "EntityGuid": product.productGuid,
+          "PayloadJson": jsonEncode(data),
+          "SyncStatus": 1,
+          "RetryCount": 0,
+          "CreatedAtUTC": DateTime.now().toUtc().toIso8601String(),
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    } catch (_) {}
+  }
+
   Future<void> _syncCreateProductInBackground(ProductModel localProduct, Map<String, dynamic> data) async {
     try {
+      final db = await _db.database;
+
+      // 1. Resolve real server category ID by matching name on server
+      int targetCategoryId = localProduct.categoryId;
+      try {
+        final catResponse = await _dioClient.get(ApiEndpoints.categories);
+        if (catResponse.success && catResponse.data != null) {
+          final serverCats = catResponse.data as List<dynamic>;
+
+          final matchedCat = serverCats.firstWhere(
+            (c) => (c["categoryName"] as String? ?? "").trim().toLowerCase() == localProduct.categoryName.trim().toLowerCase(),
+            orElse: () => null,
+          );
+
+          if (matchedCat != null) {
+            targetCategoryId = (matchedCat["categoryId"] ?? matchedCat["id"] as num).toInt();
+            await db.update(
+              DatabaseTables.localProduct,
+              {"CategoryId": targetCategoryId},
+              where: "ProductId = ?",
+              whereArgs: [localProduct.id],
+            );
+          } else if (localProduct.categoryName.isNotEmpty && localProduct.categoryName.toLowerCase() != "general") {
+            // Category doesn't exist on server yet! Create it first on server!
+            final createCatRes = await _dioClient.post(
+              ApiEndpoints.categories,
+              data: {
+                "categoryName": localProduct.categoryName,
+                "displayOrder": 1,
+              },
+            );
+            if (createCatRes.success && createCatRes.data != null) {
+              final newId = (createCatRes.data["categoryId"] ?? createCatRes.data["id"] as num?)?.toInt();
+              if (newId != null && newId > 0) {
+                targetCategoryId = newId;
+                await db.update(
+                  DatabaseTables.localProduct,
+                  {"CategoryId": targetCategoryId},
+                  where: "ProductId = ?",
+                  whereArgs: [localProduct.id],
+                );
+              }
+            }
+          }
+        }
+      } catch (_) {}
+
+      // 2. Format clean, typed payload matching CreateProductDto
+      String? cleanImageKey = localProduct.productImageStorageKey;
+      if (cleanImageKey != null && cleanImageKey.length > 250) {
+        cleanImageKey = cleanImageKey.substring(0, 250);
+      }
+
+      final payload = <String, dynamic>{
+        "categoryId": targetCategoryId,
+        "productName": localProduct.productName.trim(),
+        if (localProduct.description != null && localProduct.description!.trim().isNotEmpty)
+          "description": localProduct.description!.trim(),
+        if (cleanImageKey != null && cleanImageKey.isNotEmpty)
+          "productImageStorageKey": cleanImageKey,
+        "sellingPrice": localProduct.sellingPrice > 0 ? localProduct.sellingPrice : 1.0,
+        if (localProduct.taxId != null) "taxId": localProduct.taxId,
+        "taxPercentage": localProduct.taxPercentage,
+        if (localProduct.hsnCode != null && localProduct.hsnCode!.trim().isNotEmpty)
+          "hsnCode": localProduct.hsnCode!.trim(),
+        "isAvailable": localProduct.isAvailable,
+      };
+
       final response = await _dioClient.post(
         ApiEndpoints.products,
-        data: data,
+        data: payload,
       );
+
       if (response.success && response.data != null) {
         final serverProduct = ProductModel.fromJson(response.data as Map<String, dynamic>);
+        if (serverProduct.id != localProduct.id) {
+          await db.delete(
+            DatabaseTables.localProduct,
+            where: "ProductId = ?",
+            whereArgs: [localProduct.id],
+          );
+        }
         await _cacheProduct(serverProduct);
+
+        await db.update(
+          DatabaseTables.localSyncOutbox,
+          {"SyncStatus": 3},
+          where: "EntityType = 'PRODUCT' AND EntityGuid = ?",
+          whereArgs: [localProduct.productGuid],
+        );
       }
     } catch (_) {}
   }
@@ -396,6 +504,11 @@ class ProductRepository {
       final db = await _db.database;
       final batch = db.batch();
       for (final p in products) {
+        await db.delete(
+          DatabaseTables.localProduct,
+          where: "LOWER(ProductName) = ? AND ProductId != ?",
+          whereArgs: [p.productName.trim().toLowerCase(), p.id],
+        );
         batch.insert(
           DatabaseTables.localProduct,
           p.toSqlite(),

@@ -1,5 +1,7 @@
 import "dart:async";
+import "dart:convert";
 import "package:sqflite/sqflite.dart";
+import "package:uuid/uuid.dart";
 import "../../../core/constants/api_endpoints.dart";
 import "../../../core/database/app_database.dart";
 import "../../../core/database/database_tables.dart";
@@ -107,6 +109,9 @@ class CategoryRepository {
 
     await _cacheCategory(localCategory);
 
+    // Save to LocalSyncOutbox for guaranteed synchronization
+    await _recordCategoryInOutbox(localCategory);
+
     // 2. Next: sync with Online DB in background
     unawaited(_syncCreateCategoryInBackground(localCategory, {
       "categoryName": name,
@@ -118,6 +123,26 @@ class CategoryRepository {
     return localCategory;
   }
 
+  Future<void> _recordCategoryInOutbox(CategoryModel category) async {
+    try {
+      final db = await _db.database;
+      await db.insert(
+        DatabaseTables.localSyncOutbox,
+        {
+          "EventGuid": const Uuid().v4(),
+          "IdempotencyKey": "cat-${category.categoryGuid}",
+          "EntityType": "CATEGORY",
+          "EntityGuid": category.categoryGuid,
+          "PayloadJson": jsonEncode(category.toJson()),
+          "SyncStatus": 1,
+          "RetryCount": 0,
+          "CreatedAtUTC": DateTime.now().toUtc().toIso8601String(),
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    } catch (_) {}
+  }
+
   Future<void> _syncCreateCategoryInBackground(CategoryModel localCat, Map<String, dynamic> body) async {
     try {
       final response = await _dioClient.post(
@@ -126,7 +151,30 @@ class CategoryRepository {
       );
       if (response.success && response.data != null) {
         final serverCat = CategoryModel.fromJson(response.data as Map<String, dynamic>);
+        final db = await _db.database;
+        if (serverCat.categoryId != localCat.categoryId) {
+          // Re-map any products referencing the temporary ID to the new server ID
+          await db.update(
+            DatabaseTables.localProduct,
+            {"CategoryId": serverCat.categoryId},
+            where: "CategoryId = ?",
+            whereArgs: [localCat.categoryId],
+          );
+          // Delete old temporary ID row
+          await db.delete(
+            DatabaseTables.localCategory,
+            where: "CategoryId = ?",
+            whereArgs: [localCat.categoryId],
+          );
+        }
         await _cacheCategory(serverCat);
+
+        await db.update(
+          DatabaseTables.localSyncOutbox,
+          {"SyncStatus": 3},
+          where: "EntityType = 'CATEGORY' AND EntityGuid = ?",
+          whereArgs: [localCat.categoryGuid],
+        );
       }
     } catch (_) {}
   }
@@ -262,6 +310,12 @@ class CategoryRepository {
       final db = await _db.database;
       final batch = db.batch();
       for (final c in categories) {
+        // Remove duplicate temporary categories with same name
+        await db.delete(
+          DatabaseTables.localCategory,
+          where: "LOWER(CategoryName) = ? AND CategoryId != ?",
+          whereArgs: [c.categoryName.trim().toLowerCase(), c.categoryId],
+        );
         batch.insert(
           DatabaseTables.localCategory,
           c.toLocalDbMap(),
