@@ -5,6 +5,7 @@ import "package:billing_pos_app/shared/widgets/app_button.dart";
 import "package:billing_pos_app/shared/widgets/app_image_upload_picker.dart";
 import "package:billing_pos_app/shared/widgets/app_text_field.dart";
 import "package:billing_pos_app/features/products/models/product_model.dart";
+import "package:billing_pos_app/features/categories/presentation/category_state.dart";
 import "../product_state.dart";
 
 class ProductFormDialog extends ConsumerStatefulWidget {
@@ -33,6 +34,9 @@ class _ProductFormDialogState extends ConsumerState<ProductFormDialog> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(categoryNotifierProvider.notifier).loadCategories();
+    });
     final p = widget.product;
     _nameController = TextEditingController(text: p?.productName ?? "");
     _priceController = TextEditingController(text: p != null ? p.sellingPrice.toString() : "");

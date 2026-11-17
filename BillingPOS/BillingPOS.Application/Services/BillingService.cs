@@ -1,5 +1,6 @@
 using BillingPOS.Application.DTOs;
 using BillingPOS.Application.Interfaces;
+using BillingPOS.Domain.Constants;
 using BillingPOS.Domain.Entities;
 using BillingPOS.Domain.Enums;
 using BillingPOS.Domain.Interfaces;
@@ -72,9 +73,12 @@ public class BillingService : IBillingService
                 return ApiResponse<InvoiceDto>.FailureResult("Validation failed.", errors);
             }
 
-            // Company & Shop resolution
-            var company = await _companyRepository.Query().FirstOrDefaultAsync(cancellationToken);
-            var shop = await _shopRepository.Query().FirstOrDefaultAsync(cancellationToken);
+            // Multi-Tenant Company & Shop resolution
+            long targetCompanyId = _currentUserService.CompanyId ?? 1;
+            var company = await _companyRepository.GetByIdAsync(targetCompanyId, cancellationToken)
+                ?? await _companyRepository.Query().FirstOrDefaultAsync(cancellationToken);
+            var shop = await _shopRepository.FirstOrDefaultAsync(s => s.CompanyId == targetCompanyId, cancellationToken)
+                ?? await _shopRepository.Query().FirstOrDefaultAsync(cancellationToken);
             if (company == null || shop == null)
             {
                 return ApiResponse<InvoiceDto>.FailureResult("Shop setup is required before creating invoices.");
@@ -243,6 +247,12 @@ public class BillingService : IBillingService
                 .Include(i => i.Items)
                 .Include(i => i.Payments)
                 .AsQueryable();
+
+            // Multi-Tenant Isolation
+            if (_currentUserService.Role != RoleConstants.SAdmin && _currentUserService.CompanyId.HasValue)
+            {
+                query = query.Where(i => i.CompanyId == _currentUserService.CompanyId.Value);
+            }
 
             if (status.HasValue)
             {

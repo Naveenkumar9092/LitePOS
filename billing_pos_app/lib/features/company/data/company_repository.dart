@@ -24,14 +24,16 @@ final appDatabaseProvider = Provider<AppDatabase>((ref) {
 final companyRepositoryProvider = Provider<CompanyRepository>((ref) {
   final dioClient = ref.watch(dioClientProvider);
   final appDb = ref.watch(appDatabaseProvider);
-  return CompanyRepository(dioClient, appDb);
+  final storage = ref.watch(storageServiceProvider);
+  return CompanyRepository(dioClient, appDb, storage);
 });
 
 class CompanyRepository {
   final DioClient _dioClient;
   final AppDatabase _appDb;
+  final IStorageService _storageService;
 
-  CompanyRepository(this._dioClient, this._appDb);
+  CompanyRepository(this._dioClient, this._appDb, this._storageService);
 
   Future<CompanyProfileModel> setupCompany(Map<String, dynamic> request) async {
     // 1. FAST LOCAL-FIRST: Save company in local SQLite
@@ -89,9 +91,9 @@ class CompanyRepository {
     return companyModel;
   }
 
-  Future<CompanyProfileModel> getProfile() async {
+  Future<CompanyProfileModel> getProfile({int? companyId}) async {
     // 1. FAST LOCAL-FIRST: Check local SQLite profile
-    final local = await getLocalProfile();
+    final local = await getLocalProfile(companyId: companyId);
     unawaited(_syncRemoteProfile());
 
     if (local != null) {
@@ -113,17 +115,17 @@ class CompanyRepository {
 
     // 3. Fallback default profile so UI never crashes
     final defaultCompany = CompanyProfileModel(
-      companyId: 1,
-      companyName: "Pooja Sweets & Cafe",
-      legalName: "Pooja Sweets & Cafe",
+      companyId: companyId ?? 1,
+      companyName: "PulsePOS Store",
+      legalName: "PulsePOS Store",
       businessCategory: BusinessCategory.cafe,
-      email: "contact@poojasweets.com",
+      email: "contact@store.com",
       mobileNumber: "9876543210",
       isActive: true,
       shop: ShopModel(
-        shopId: 1,
-        companyId: 1,
-        shopName: "Pooja Sweets & Cafe",
+        shopId: companyId ?? 1,
+        companyId: companyId ?? 1,
+        shopName: "PulsePOS Store",
         addressLine1: "Counter 01",
         city: "City",
         state: "Tamil Nadu",
@@ -292,10 +294,28 @@ class CompanyRepository {
     return companyModel;
   }
 
-  Future<CompanyProfileModel?> getLocalProfile() async {
+  Future<CompanyProfileModel?> getLocalProfile({int? companyId}) async {
     try {
       final db = await _appDb.database;
-      final companies = await db.query(DatabaseTables.localCompany, limit: 1);
+      int? targetId = companyId;
+      if (targetId == null) {
+        final lastCompanyStr = await _storageService.read("last_active_company_id");
+        if (lastCompanyStr != null) {
+          targetId = int.tryParse(lastCompanyStr);
+        }
+      }
+
+      final List<Map<String, dynamic>> companies;
+      if (targetId != null && targetId > 0) {
+        companies = await db.query(
+          DatabaseTables.localCompany,
+          where: "CompanyId = ?",
+          whereArgs: [targetId],
+          limit: 1,
+        );
+      } else {
+        companies = await db.query(DatabaseTables.localCompany, limit: 1);
+      }
       if (companies.isEmpty) return null;
 
       final companyMap = Map<String, dynamic>.from(companies.first);

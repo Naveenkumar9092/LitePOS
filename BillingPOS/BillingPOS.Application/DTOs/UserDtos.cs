@@ -23,7 +23,9 @@ public record CreateUserDto(
     string? MobileNumber,
     string Password,
     int RoleId,
-    long? ShopId = null
+    long? ShopId = null,
+    long? CompanyId = null,
+    string? CompanyName = null
 );
 
 public record UpdateUserDto(

@@ -116,6 +116,7 @@ class _CreateAdminDialogState extends ConsumerState<CreateAdminDialog> {
         "mobileNumber": _mobileController.text.trim().isEmpty ? null : _mobileController.text.trim(),
         "roleId": 2, // Role 2: Admin (Shop Administrator)
         "companyId": assignedCompanyId,
+        "companyName": _isCreatingNewCompany ? assignedCompanyName : null,
       });
 
       if (mounted) {

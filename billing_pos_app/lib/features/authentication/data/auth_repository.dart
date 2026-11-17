@@ -49,6 +49,7 @@ class AuthRepository {
 
           // First save in local SQLite for offline resilience!
           await _cacheUserToSqlite(authData.user);
+          await _handleMultiCompanyIsolation(authData.user);
 
           return authData;
         }
@@ -82,6 +83,7 @@ class AuthRepository {
               await _storageService.write("current_user_json", jsonEncode(authData.user.toJson()));
               await _storageService.write("user_role", authData.user.roleName);
               await _cacheUserToSqlite(authData.user);
+              await _handleMultiCompanyIsolation(authData.user);
               return authData;
             }
           } catch (_) {}
@@ -174,6 +176,7 @@ class AuthRepository {
     await _storageService.write("current_user_json", jsonEncode(matchedUser.toJson()));
     await _storageService.write("user_role", matchedUser.roleName);
     await _cacheUserToSqlite(matchedUser);
+    await _handleMultiCompanyIsolation(matchedUser);
 
     return AuthResponseModel(
       accessToken: offlineToken,
@@ -223,6 +226,7 @@ class AuthRepository {
       await _storageService.delete(AppConstants.refreshTokenKey);
       await _storageService.delete("current_user_json");
       await _storageService.delete("user_role");
+      await _storageService.delete("last_active_company_id");
     }
   }
 
@@ -273,6 +277,23 @@ class AuthRepository {
         user.toSqlite(),
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
+    } catch (_) {}
+  }
+
+  Future<void> _handleMultiCompanyIsolation(UserModel user) async {
+    try {
+      final lastCompanyIdStr = await _storageService.read("last_active_company_id");
+      final currentCompanyId = user.companyId.toString();
+
+      if (lastCompanyIdStr != null && lastCompanyIdStr != currentCompanyId && !user.isSAdmin) {
+        // Multi-tenant isolation: Wipe previous company's cached records so new store starts isolated
+        final db = await _db.database;
+        await db.delete(DatabaseTables.localProduct);
+        await db.delete(DatabaseTables.localInvoiceDetail);
+        await db.delete(DatabaseTables.localInvoice);
+        await db.delete(DatabaseTables.localCustomer);
+      }
+      await _storageService.write("last_active_company_id", currentCompanyId);
     } catch (_) {}
   }
 }

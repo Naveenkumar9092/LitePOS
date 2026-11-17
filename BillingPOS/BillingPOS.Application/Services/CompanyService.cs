@@ -13,6 +13,7 @@ public class CompanyService : ICompanyService
     private readonly IRepository<Company> _companyRepository;
     private readonly IRepository<Shop> _shopRepository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ICurrentUserService _currentUserService;
     private readonly IValidator<CompanySetupRequestDto> _setupValidator;
     private readonly IValidator<UpdateCompanyProfileDto> _profileValidator;
     private readonly IValidator<UpdateShopConfigurationDto> _shopConfigValidator;
@@ -21,6 +22,7 @@ public class CompanyService : ICompanyService
         IRepository<Company> companyRepository,
         IRepository<Shop> shopRepository,
         IUnitOfWork unitOfWork,
+        ICurrentUserService currentUserService,
         IValidator<CompanySetupRequestDto> setupValidator,
         IValidator<UpdateCompanyProfileDto> profileValidator,
         IValidator<UpdateShopConfigurationDto> shopConfigValidator)
@@ -28,6 +30,7 @@ public class CompanyService : ICompanyService
         _companyRepository = companyRepository;
         _shopRepository = shopRepository;
         _unitOfWork = unitOfWork;
+        _currentUserService = currentUserService;
         _setupValidator = setupValidator;
         _profileValidator = profileValidator;
         _shopConfigValidator = shopConfigValidator;
@@ -90,7 +93,13 @@ public class CompanyService : ICompanyService
 
     public async Task<CompanyProfileDto> GetCompanyProfileAsync(CancellationToken cancellationToken = default)
     {
-        var company = await _companyRepository.FirstOrDefaultAsync(c => c.IsActive, cancellationToken);
+        Company? company = null;
+        if (_currentUserService.CompanyId.HasValue && _currentUserService.CompanyId.Value > 0)
+        {
+            company = await _companyRepository.GetByIdAsync(_currentUserService.CompanyId.Value, cancellationToken);
+        }
+
+        company ??= await _companyRepository.FirstOrDefaultAsync(c => c.IsActive, cancellationToken);
         if (company == null)
         {
             throw new NotFoundException("Company profile not found. Please complete company setup first.");
@@ -109,7 +118,13 @@ public class CompanyService : ICompanyService
             throw new ValidationException(validationResult.Errors.Select(e => e.ErrorMessage));
         }
 
-        var company = await _companyRepository.FirstOrDefaultAsync(c => c.IsActive, cancellationToken);
+        Company? company = null;
+        if (_currentUserService.CompanyId.HasValue && _currentUserService.CompanyId.Value > 0)
+        {
+            company = await _companyRepository.GetByIdAsync(_currentUserService.CompanyId.Value, cancellationToken);
+        }
+
+        company ??= await _companyRepository.FirstOrDefaultAsync(c => c.IsActive, cancellationToken);
         if (company == null)
         {
             throw new NotFoundException("Company profile not found.");
@@ -137,7 +152,13 @@ public class CompanyService : ICompanyService
 
     public async Task<ShopConfigurationDto> GetShopConfigurationAsync(CancellationToken cancellationToken = default)
     {
-        var company = await _companyRepository.FirstOrDefaultAsync(c => c.IsActive, cancellationToken);
+        Company? company = null;
+        if (_currentUserService.CompanyId.HasValue && _currentUserService.CompanyId.Value > 0)
+        {
+            company = await _companyRepository.GetByIdAsync(_currentUserService.CompanyId.Value, cancellationToken);
+        }
+
+        company ??= await _companyRepository.FirstOrDefaultAsync(c => c.IsActive, cancellationToken);
         if (company == null)
         {
             throw new NotFoundException("Company profile not found.");
@@ -160,7 +181,13 @@ public class CompanyService : ICompanyService
             throw new ValidationException(validationResult.Errors.Select(e => e.ErrorMessage));
         }
 
-        var company = await _companyRepository.FirstOrDefaultAsync(c => c.IsActive, cancellationToken);
+        Company? company = null;
+        if (_currentUserService.CompanyId.HasValue && _currentUserService.CompanyId.Value > 0)
+        {
+            company = await _companyRepository.GetByIdAsync(_currentUserService.CompanyId.Value, cancellationToken);
+        }
+
+        company ??= await _companyRepository.FirstOrDefaultAsync(c => c.IsActive, cancellationToken);
         if (company == null)
         {
             throw new NotFoundException("Company profile not found.");

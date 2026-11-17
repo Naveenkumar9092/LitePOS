@@ -124,16 +124,17 @@ public class DashboardService : IDashboardService
     {
         var targetDate = (date ?? _dateTimeService.UtcNow).Date;
         var nextDay = targetDate.AddDays(1);
+        long? companyId = _currentUserService.CompanyId;
 
         var todayInvoicesQuery = _invoiceRepository.Query()
-            .Where(i => i.InvoiceDateUtc >= targetDate && i.InvoiceDateUtc < nextDay && i.InvoiceStatus != InvoiceStatus.Cancelled);
+            .Where(i => (!companyId.HasValue || i.CompanyId == companyId.Value) && i.InvoiceDateUtc >= targetDate && i.InvoiceDateUtc < nextDay && i.InvoiceStatus != InvoiceStatus.Cancelled);
 
         var todayInvoices = await todayInvoicesQuery.CountAsync(cancellationToken);
         var todaySales = await todayInvoicesQuery.SumAsync(i => (decimal?)i.GrandTotal, cancellationToken) ?? 0m;
 
         // Payment aggregations today
         var todayPaymentsQuery = _paymentRepository.Query()
-            .Where(p => p.CreatedAtUtc >= targetDate && p.CreatedAtUtc < nextDay && p.PaymentStatus == PaymentStatus.Paid);
+            .Where(p => (!companyId.HasValue || p.Invoice.CompanyId == companyId.Value) && p.CreatedAtUtc >= targetDate && p.CreatedAtUtc < nextDay && p.PaymentStatus == PaymentStatus.Paid);
 
         var cashSales = await todayPaymentsQuery
             .Where(p => p.PaymentMode == PaymentMode.Cash)
@@ -150,11 +151,11 @@ public class DashboardService : IDashboardService
         var totalCustomers = await _customerRepository.CountAsync(c => c.IsActive, cancellationToken);
 
         var completedOrders = await _orderRepository.CountAsync(
-            o => o.CreatedAtUtc >= targetDate && o.CreatedAtUtc < nextDay && o.OrderStatus == OrderStatus.Completed, 
+            o => (!companyId.HasValue || (o.Invoice != null && o.Invoice.CompanyId == companyId.Value)) && o.CreatedAtUtc >= targetDate && o.CreatedAtUtc < nextDay && o.OrderStatus == OrderStatus.Completed, 
             cancellationToken);
 
         var cancelledOrders = await _orderRepository.CountAsync(
-            o => o.CreatedAtUtc >= targetDate && o.CreatedAtUtc < nextDay && o.OrderStatus == OrderStatus.Cancelled, 
+            o => (!companyId.HasValue || (o.Invoice != null && o.Invoice.CompanyId == companyId.Value)) && o.CreatedAtUtc >= targetDate && o.CreatedAtUtc < nextDay && o.OrderStatus == OrderStatus.Cancelled, 
             cancellationToken);
 
         // Daily Hourly trend for today (e.g., 09:00 to 22:00 in 2-hour slots)
@@ -178,7 +179,7 @@ public class DashboardService : IDashboardService
         // Monthly / Last 7 Days trend
         var sevenDaysAgo = targetDate.AddDays(-6);
         var pastWeekInvoices = await _invoiceRepository.Query()
-            .Where(i => i.InvoiceDateUtc >= sevenDaysAgo && i.InvoiceDateUtc < nextDay && i.InvoiceStatus != InvoiceStatus.Cancelled)
+            .Where(i => (!companyId.HasValue || i.CompanyId == companyId.Value) && i.InvoiceDateUtc >= sevenDaysAgo && i.InvoiceDateUtc < nextDay && i.InvoiceStatus != InvoiceStatus.Cancelled)
             .Select(i => new { i.InvoiceDateUtc.Date, i.GrandTotal })
             .ToListAsync(cancellationToken);
 
@@ -198,7 +199,7 @@ public class DashboardService : IDashboardService
         // Cashier-wise breakdown today
         var cashierSales = await _invoiceRepository.Query()
             .Include(i => i.Cashier)
-            .Where(i => i.InvoiceDateUtc >= targetDate && i.InvoiceDateUtc < nextDay && i.InvoiceStatus != InvoiceStatus.Cancelled)
+            .Where(i => (!companyId.HasValue || i.CompanyId == companyId.Value) && i.InvoiceDateUtc >= targetDate && i.InvoiceDateUtc < nextDay && i.InvoiceStatus != InvoiceStatus.Cancelled)
             .GroupBy(i => new { i.CashierId, i.Cashier.FullName })
             .Select(g => new CashierSalesDto(
                 g.Key.CashierId,
@@ -213,6 +214,7 @@ public class DashboardService : IDashboardService
             .Include(i => i.Customer)
             .Include(i => i.Cashier)
             .Include(i => i.Payments)
+            .Where(i => !companyId.HasValue || i.CompanyId == companyId.Value)
             .OrderByDescending(i => i.InvoiceDateUtc)
             .Take(10)
             .Select(i => new RecentTransactionDto(

@@ -47,6 +47,8 @@ public class SyncServiceTests : IDisposable
         var gstConfigRepo = new GenericRepository<GstConfiguration>(_dbContext);
         var syncAuditLogRepo = new GenericRepository<SyncAuditLog>(_dbContext);
         var unitOfWork = new UnitOfWork(_dbContext);
+        var currentUserServiceMock = new Mock<ICurrentUserService>();
+        currentUserServiceMock.Setup(u => u.CompanyId).Returns(1);
         var loggerMock = new Mock<ILogger<SyncService>>();
 
         _syncService = new SyncService(
@@ -61,6 +63,7 @@ public class SyncServiceTests : IDisposable
             gstConfigRepo,
             syncAuditLogRepo,
             unitOfWork,
+            currentUserServiceMock.Object,
             mockDateTimeService.Object,
             loggerMock.Object);
     }

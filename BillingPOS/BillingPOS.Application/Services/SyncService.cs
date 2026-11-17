@@ -22,6 +22,7 @@ public class SyncService : ISyncService
     private readonly IRepository<GstConfiguration> _gstConfigRepository;
     private readonly IRepository<SyncAuditLog> _syncAuditLogRepository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ICurrentUserService _currentUserService;
     private readonly IDateTimeService _dateTimeService;
     private readonly ILogger<SyncService> _logger;
 
@@ -37,6 +38,7 @@ public class SyncService : ISyncService
         IRepository<GstConfiguration> gstConfigRepository,
         IRepository<SyncAuditLog> syncAuditLogRepository,
         IUnitOfWork unitOfWork,
+        ICurrentUserService currentUserService,
         IDateTimeService dateTimeService,
         ILogger<SyncService> logger)
     {
@@ -51,6 +53,7 @@ public class SyncService : ISyncService
         _gstConfigRepository = gstConfigRepository;
         _syncAuditLogRepository = syncAuditLogRepository;
         _unitOfWork = unitOfWork;
+        _currentUserService = currentUserService;
         _dateTimeService = dateTimeService;
         _logger = logger;
     }
@@ -316,7 +319,13 @@ public class SyncService : ISyncService
         var watermark = request.LastSyncTimestampUtc;
 
         // 1. Company
-        var company = await _companyRepository.Query().Include(c => c.Shop).FirstOrDefaultAsync(cancellationToken);
+        long? companyId = _currentUserService.CompanyId;
+        Company? company = null;
+        if (companyId.HasValue && companyId.Value > 0)
+        {
+            company = await _companyRepository.Query().Include(c => c.Shop).FirstOrDefaultAsync(c => c.Id == companyId.Value, cancellationToken);
+        }
+        company ??= await _companyRepository.Query().Include(c => c.Shop).FirstOrDefaultAsync(cancellationToken);
         CompanyProfileDto? companyDto = null;
         if (company != null)
         {
@@ -376,9 +385,16 @@ public class SyncService : ISyncService
             .ToListAsync(cancellationToken);
 
         // 3. Products
-        var products = await _productRepository.Query().AsNoTracking()
+        var productsQuery = _productRepository.Query().AsNoTracking()
             .Include(p => p.Category)
-            .Where(p => p.IsActive)
+            .Where(p => p.IsActive);
+
+        if (companyId.HasValue && companyId.Value > 0)
+        {
+            productsQuery = productsQuery.Where(p => p.CompanyId == companyId.Value);
+        }
+
+        var products = await productsQuery
             .OrderBy(p => p.ProductName)
             .Select(p => new ProductDto(
                 p.Id,

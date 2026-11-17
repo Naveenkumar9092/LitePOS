@@ -1,7 +1,9 @@
 using BillingPOS.Application.DTOs;
 using BillingPOS.Application.Exceptions;
 using BillingPOS.Application.Interfaces;
+using BillingPOS.Domain.Constants;
 using BillingPOS.Domain.Entities;
+using BillingPOS.Domain.Enums;
 using BillingPOS.Domain.Interfaces;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
@@ -20,6 +22,7 @@ public class UserService : IUserService
     private readonly IRepository<LoginAuditLog> _auditLogRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IPasswordHasher _passwordHasher;
+    private readonly ICurrentUserService _currentUserService;
     private readonly IValidator<CreateUserDto> _createValidator;
     private readonly IValidator<UpdateUserDto> _updateValidator;
 
@@ -33,6 +36,7 @@ public class UserService : IUserService
         IRepository<LoginAuditLog> auditLogRepository,
         IUnitOfWork unitOfWork,
         IPasswordHasher passwordHasher,
+        ICurrentUserService currentUserService,
         IValidator<CreateUserDto> createValidator,
         IValidator<UpdateUserDto> updateValidator)
     {
@@ -45,6 +49,7 @@ public class UserService : IUserService
         _auditLogRepository = auditLogRepository;
         _unitOfWork = unitOfWork;
         _passwordHasher = passwordHasher;
+        _currentUserService = currentUserService;
         _createValidator = createValidator;
         _updateValidator = updateValidator;
     }
@@ -78,23 +83,100 @@ public class UserService : IUserService
             return ApiResponse<UserDto>.Fail("Specified role is invalid or inactive.");
         }
 
-        // Get company and shop
-        var company = await _companyRepository.FirstOrDefaultAsync(c => c.IsActive, cancellationToken);
-        if (company == null)
-        {
-            return ApiResponse<UserDto>.Fail("Company must be configured before registering users.");
-        }
-
+        // Multi-Tenant Company & Shop Assignment
+        long targetCompanyId;
         long? targetShopId = request.ShopId;
-        if (targetShopId == null)
+
+        if (_currentUserService.Role == RoleConstants.Admin && _currentUserService.CompanyId.HasValue)
         {
-            var shop = await _shopRepository.FirstOrDefaultAsync(s => s.CompanyId == company.Id, cancellationToken);
-            targetShopId = shop?.Id;
+            // Admin can only create Cashiers/Users for their own company
+            targetCompanyId = _currentUserService.CompanyId.Value;
+            if (targetShopId == null)
+            {
+                var shop = await _shopRepository.FirstOrDefaultAsync(s => s.CompanyId == targetCompanyId, cancellationToken);
+                targetShopId = shop?.Id ?? _currentUserService.ShopId;
+            }
+        }
+        else if (request.CompanyId.HasValue && request.CompanyId.Value > 0)
+        {
+            // Specific company explicitly requested (e.g. by SAdmin)
+            var comp = await _companyRepository.GetByIdAsync(request.CompanyId.Value, cancellationToken);
+            if (comp != null)
+            {
+                targetCompanyId = comp.Id;
+                if (targetShopId == null)
+                {
+                    var shop = await _shopRepository.FirstOrDefaultAsync(s => s.CompanyId == targetCompanyId, cancellationToken);
+                    targetShopId = shop?.Id;
+                }
+            }
+            else
+            {
+                var fallbackCompany = await _companyRepository.FirstOrDefaultAsync(c => c.IsActive, cancellationToken);
+                if (fallbackCompany == null)
+                {
+                    return ApiResponse<UserDto>.Fail("Company must be configured before registering users.");
+                }
+                targetCompanyId = fallbackCompany.Id;
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(request.CompanyName))
+        {
+            // SAdmin registering a new Admin along with a new store/company
+            var newCompany = new Company
+            {
+                CompanyName = request.CompanyName.Trim(),
+                LegalName = request.CompanyName.Trim(),
+                BusinessType = BusinessType.Cafe,
+                Email = request.Email?.Trim().ToLowerInvariant() ?? $"{request.Username.Trim().ToLower()}@litepos.com",
+                MobileNumber = request.MobileNumber?.Trim() ?? "9876543210",
+                IsActive = true,
+                CreatedAtUtc = DateTime.UtcNow
+            };
+            await _companyRepository.AddAsync(newCompany, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            var newShop = new Shop
+            {
+                CompanyId = newCompany.Id,
+                ShopName = newCompany.CompanyName,
+                AddressLine1 = "Main Store",
+                City = "Chennai",
+                State = "Tamil Nadu",
+                Pincode = "600001",
+                Country = "India",
+                ContactNumber = newCompany.MobileNumber,
+                Email = newCompany.Email,
+                TimeZone = "Asia/Kolkata",
+                CurrencyCode = "INR",
+                IsActive = true,
+                CreatedAtUtc = DateTime.UtcNow
+            };
+            await _shopRepository.AddAsync(newShop, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            targetCompanyId = newCompany.Id;
+            targetShopId = newShop.Id;
+        }
+        else
+        {
+            // Fallback to active company
+            var company = await _companyRepository.FirstOrDefaultAsync(c => c.IsActive, cancellationToken);
+            if (company == null)
+            {
+                return ApiResponse<UserDto>.Fail("Company must be configured before registering users.");
+            }
+            targetCompanyId = company.Id;
+            if (targetShopId == null)
+            {
+                var shop = await _shopRepository.FirstOrDefaultAsync(s => s.CompanyId == company.Id, cancellationToken);
+                targetShopId = shop?.Id;
+            }
         }
 
         var user = new User
         {
-            CompanyId = company.Id,
+            CompanyId = targetCompanyId,
             ShopId = targetShopId,
             FullName = request.FullName.Trim(),
             Username = request.Username.Trim(),
@@ -143,6 +225,12 @@ public class UserService : IUserService
             .Include(u => u.Role)
             .Include(u => u.Shop)
             .AsNoTracking();
+
+        // Enforce Multi-Tenant Data Isolation
+        if (_currentUserService.Role != RoleConstants.SAdmin && _currentUserService.CompanyId.HasValue)
+        {
+            query = query.Where(u => u.CompanyId == _currentUserService.CompanyId.Value);
+        }
 
         if (!string.IsNullOrWhiteSpace(search))
         {

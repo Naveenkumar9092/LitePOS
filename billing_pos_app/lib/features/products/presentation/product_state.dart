@@ -1,4 +1,5 @@
 import "package:flutter_riverpod/flutter_riverpod.dart";
+import "../../authentication/presentation/auth_state.dart";
 import "../../categories/presentation/category_state.dart";
 import "../../company/data/company_repository.dart";
 import "../data/product_repository.dart";
@@ -70,8 +71,11 @@ class ProductListState {
 
 class ProductListNotifier extends StateNotifier<ProductListState> {
   final ProductRepository _repository;
+  final int? _companyId;
 
-  ProductListNotifier(this._repository) : super(const ProductListState()) {
+  ProductListNotifier(this._repository, {int? companyId})
+      : _companyId = companyId,
+        super(const ProductListState()) {
     loadProducts();
   }
 
@@ -83,6 +87,7 @@ class ProductListNotifier extends StateNotifier<ProductListState> {
         categoryId: state.selectedCategoryId,
         isAvailable: state.selectedAvailability,
         isActive: state.selectedActiveStatus ?? true,
+        companyId: _companyId,
       );
 
       state = state.copyWith(
@@ -203,6 +208,9 @@ class ProductListNotifier extends StateNotifier<ProductListState> {
 
 final productListNotifierProvider = StateNotifierProvider<ProductListNotifier, ProductListState>((ref) {
   final repo = ref.watch(productRepositoryProvider);
-  return ProductListNotifier(repo);
+  final auth = ref.watch(authNotifierProvider);
+  final user = auth.user;
+  final companyId = (user != null && !user.isSAdmin) ? user.companyId : null;
+  return ProductListNotifier(repo, companyId: companyId);
 });
 

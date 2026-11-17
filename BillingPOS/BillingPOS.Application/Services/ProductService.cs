@@ -1,5 +1,6 @@
 using BillingPOS.Application.DTOs;
 using BillingPOS.Application.Interfaces;
+using BillingPOS.Domain.Constants;
 using BillingPOS.Domain.Entities;
 using BillingPOS.Domain.Interfaces;
 using FluentValidation;
@@ -58,16 +59,15 @@ public class ProductService : IProductService
             return ApiResponse<ProductDto>.FailureResult("The selected category does not exist.");
         }
 
-        // Get single company ID (Single Company constraint)
-        var company = await _companyRepository.Query().FirstOrDefaultAsync(cancellationToken);
-        long companyId = company?.Id ?? _currentUserService.CompanyId ?? 1;
+        // Get tenant company ID
+        long companyId = _currentUserService.CompanyId ?? 1;
 
-        // Check for duplicate product name within the active products
+        // Check for duplicate product name within the active products for THIS company
         var exists = await _productRepository.Query()
-            .AnyAsync(p => p.ProductName.ToLower() == dto.ProductName.ToLower().Trim() && p.IsActive, cancellationToken);
+            .AnyAsync(p => p.CompanyId == companyId && p.ProductName.ToLower() == dto.ProductName.ToLower().Trim() && p.IsActive, cancellationToken);
         if (exists)
         {
-            return ApiResponse<ProductDto>.FailureResult($"An active product named '{dto.ProductName}' already exists.");
+            return ApiResponse<ProductDto>.FailureResult($"An active product named '{dto.ProductName}' already exists in your store.");
         }
 
         var product = new Product
@@ -90,7 +90,7 @@ public class ProductService : IProductService
         await _productRepository.AddAsync(product, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        _logger.LogInformation("Product '{ProductName}' (ID: {ProductId}) registered successfully with single price {SellingPrice}", product.ProductName, product.Id, product.SellingPrice);
+        _logger.LogInformation("Product '{ProductName}' (ID: {ProductId}) registered successfully for Company {CompanyId} with single price {SellingPrice}", product.ProductName, product.Id, companyId, product.SellingPrice);
 
         return ApiResponse<ProductDto>.SuccessResult(MapToDto(product, category.CategoryName), "Product created successfully.");
     }
@@ -105,6 +105,12 @@ public class ProductService : IProductService
         CancellationToken cancellationToken = default)
     {
         var query = _productRepository.Query().Include(p => p.Category).AsNoTracking();
+
+        // Enforce Multi-Tenant Isolation: Users only see products of their own company
+        if (_currentUserService.Role != RoleConstants.SAdmin && _currentUserService.CompanyId.HasValue)
+        {
+            query = query.Where(p => p.CompanyId == _currentUserService.CompanyId.Value);
+        }
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -147,7 +153,7 @@ public class ProductService : IProductService
             .Include(p => p.Category)
             .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
 
-        if (product == null)
+        if (product == null || (_currentUserService.Role != RoleConstants.SAdmin && _currentUserService.CompanyId.HasValue && product.CompanyId != _currentUserService.CompanyId.Value))
         {
             return ApiResponse<ProductDto>.FailureResult("Product not found.");
         }
@@ -168,7 +174,7 @@ public class ProductService : IProductService
             .Include(p => p.Category)
             .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
 
-        if (product == null)
+        if (product == null || (_currentUserService.Role != RoleConstants.SAdmin && _currentUserService.CompanyId.HasValue && product.CompanyId != _currentUserService.CompanyId.Value))
         {
             return ApiResponse<ProductDto>.FailureResult("Product not found.");
         }
@@ -179,14 +185,14 @@ public class ProductService : IProductService
             return ApiResponse<ProductDto>.FailureResult("The selected category does not exist.");
         }
 
-        // Check for duplicate name if changed
+        // Check for duplicate name within this company if changed
         if (product.ProductName.ToLower() != dto.ProductName.ToLower().Trim())
         {
             var duplicate = await _productRepository.Query()
-                .AnyAsync(p => p.Id != id && p.ProductName.ToLower() == dto.ProductName.ToLower().Trim() && p.IsActive, cancellationToken);
+                .AnyAsync(p => p.CompanyId == product.CompanyId && p.Id != id && p.ProductName.ToLower() == dto.ProductName.ToLower().Trim() && p.IsActive, cancellationToken);
             if (duplicate)
             {
-                return ApiResponse<ProductDto>.FailureResult($"Another active product named '{dto.ProductName}' already exists.");
+                return ApiResponse<ProductDto>.FailureResult($"Another active product named '{dto.ProductName}' already exists in your store.");
             }
         }
 

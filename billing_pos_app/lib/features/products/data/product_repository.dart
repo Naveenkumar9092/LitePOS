@@ -35,6 +35,7 @@ class ProductRepository {
     int? categoryId,
     bool? isAvailable,
     bool? isActive,
+    int? companyId,
   }) async {
     // 1. FAST LOCAL-FIRST: Load seeded/cached items from SQLite immediately (< 2ms)
     final localItems = await getLocalProducts(
@@ -42,6 +43,7 @@ class ProductRepository {
       categoryId: categoryId,
       isAvailable: isAvailable,
       isActive: isActive,
+      companyId: companyId,
     );
 
     if (localItems.isNotEmpty) {
@@ -448,11 +450,17 @@ class ProductRepository {
     int? categoryId,
     bool? isAvailable,
     bool? isActive,
+    int? companyId,
   }) async {
     try {
       final db = await _db.database;
       String whereClause = "1=1";
       final List<dynamic> whereArgs = [];
+
+      if (companyId != null && companyId > 0) {
+        whereClause += " AND CompanyId = ?";
+        whereArgs.add(companyId);
+      }
 
       if (search != null && search.isNotEmpty) {
         whereClause += " AND (ProductName LIKE ? OR HSNCode LIKE ?)";
