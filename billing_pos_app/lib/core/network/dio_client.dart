@@ -1,5 +1,6 @@
 import "package:dio/dio.dart";
 import "../constants/api_endpoints.dart";
+import "../constants/app_constants.dart";
 import "../storage/storage_service.dart";
 import "api_response.dart";
 import "auth_interceptor.dart";
@@ -7,14 +8,16 @@ import "network_exceptions.dart";
 
 class DioClient {
   late final Dio _dio;
+  final IStorageService _storageService;
 
-  DioClient(IStorageService storageService, {String? baseUrl}) {
+  DioClient(IStorageService storageService, {String? baseUrl})
+      : _storageService = storageService {
     _dio = Dio(
       BaseOptions(
         baseUrl: baseUrl ?? ApiEndpoints.baseUrl,
-        connectTimeout: const Duration(milliseconds: 3000),
-        receiveTimeout: const Duration(milliseconds: 4000),
-        sendTimeout: const Duration(milliseconds: 4000),
+        connectTimeout: const Duration(seconds: 4),
+        receiveTimeout: const Duration(seconds: 4),
+        sendTimeout: const Duration(seconds: 4),
       ),
     );
 
@@ -25,6 +28,12 @@ class DioClient {
         setBaseUrl(customUrl.trim());
       }
     }).catchError((_) {});
+  }
+
+  /// Returns true if the user is in an offline session or offline token is in use
+  Future<bool> get isOfflineMode async {
+    final token = await _storageService.read(AppConstants.tokenKey);
+    return token == null || token.isEmpty || token.startsWith("offline-token");
   }
 
   void setBaseUrl(String newUrl) {

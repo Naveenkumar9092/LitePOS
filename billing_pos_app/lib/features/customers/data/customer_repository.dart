@@ -21,8 +21,31 @@ class CustomerRepository {
 
   CustomerRepository(this._dioClient, this._db);
 
-  /// Fetch customers with optional search and pagination
+  /// Fetch customers with optional search and pagination (LOCAL-FIRST)
   Future<ApiResponse<PagedCustomersResponse>> getCustomers({String? search, int page = 1, int size = 20}) async {
+    // 1. FAST LOCAL-FIRST: Load customers from SQLite immediately (< 1ms)
+    final localResult = await _loadLocalCustomers(search: search, page: page, size: size);
+
+    // 2. Background sync from server (unblocking UI!)
+    unawaited(_syncCustomersInBackground(search: search, page: page, size: size));
+
+    if (localResult.data != null && localResult.data!.items.isNotEmpty) {
+      return localResult;
+    }
+
+    return await _fetchRemoteCustomers(search: search, page: page, size: size);
+  }
+
+  Future<void> _syncCustomersInBackground({String? search, int page = 1, int size = 20}) async {
+    try {
+      final remote = await _fetchRemoteCustomers(search: search, page: page, size: size);
+      if (remote.data != null && remote.data!.items.isNotEmpty) {
+        await _cacheCustomersLocally(remote.data!.items);
+      }
+    } catch (_) {}
+  }
+
+  Future<ApiResponse<PagedCustomersResponse>> _fetchRemoteCustomers({String? search, int page = 1, int size = 20}) async {
     try {
       final Map<String, dynamic> params = {
         "pageNumber": page,
@@ -46,17 +69,24 @@ class CustomerRepository {
           data: paged,
         );
       }
-      return ApiResponse<PagedCustomersResponse>(
-        success: false,
-        message: response.message,
-      );
-    } catch (_) {
-      return await _loadLocalCustomers(search: search, page: page, size: size);
-    }
+    } catch (_) {}
+
+    return await _loadLocalCustomers(search: search, page: page, size: size);
   }
 
-  /// Lookup customers by mobile number or name for fast POS checkout
+  /// Lookup customers by mobile number or name for fast POS checkout (LOCAL-FIRST)
   Future<ApiResponse<List<CustomerLookupModel>>> lookupCustomers(String query) async {
+    // 1. FAST LOCAL-FIRST: Query local SQLite immediately (< 1ms)
+    final localList = await _loadLocalLookupCustomers(query);
+    if (localList.isNotEmpty) {
+      return ApiResponse<List<CustomerLookupModel>>(
+        success: true,
+        message: "Loaded from local DB",
+        data: localList,
+      );
+    }
+
+    // 2. Fallback to remote if not found locally
     try {
       final response = await _dioClient.get(
         "${ApiEndpoints.customers}/lookup",
@@ -73,11 +103,17 @@ class CustomerRepository {
           data: list,
         );
       }
-      return ApiResponse<List<CustomerLookupModel>>(
-        success: false,
-        message: response.message,
-      );
-    } catch (_) {
+    } catch (_) {}
+
+    return ApiResponse<List<CustomerLookupModel>>(
+      success: true,
+      message: "No customers found",
+      data: [],
+    );
+  }
+
+  Future<List<CustomerLookupModel>> _loadLocalLookupCustomers(String query) async {
+    try {
       final db = await _db.database;
       final q = "%$query%";
       final rows = await db.query(
@@ -87,7 +123,7 @@ class CustomerRepository {
         limit: 10,
       );
 
-      final list = rows.map((r) => CustomerLookupModel(
+      return rows.map((r) => CustomerLookupModel(
         id: (r["CustomerId"] as num).toInt(),
         customerName: r["CustomerName"]?.toString() ?? "",
         mobileNumber: r["MobileNumber"]?.toString() ?? "",
@@ -95,12 +131,8 @@ class CustomerRepository {
         email: r["Email"]?.toString(),
         whatsAppNumber: r["WhatsAppNumber"]?.toString(),
       )).toList();
-
-      return ApiResponse<List<CustomerLookupModel>>(
-        success: true,
-        message: "Offline lookup results.",
-        data: list,
-      );
+    } catch (_) {
+      return [];
     }
   }
 
@@ -142,36 +174,112 @@ class CustomerRepository {
     }
   }
 
-  /// Create Customer
+  /// Create Customer (LOCAL DB FIRST -> NEXT ONLINE DB)
   Future<ApiResponse<CustomerModel>> createCustomer(CreateCustomerRequest request) async {
+    // 1. FAST LOCAL-FIRST: Save in SQLite immediately (< 1ms)
+    final db = await _db.database;
+    final maxIdRow = await db.rawQuery("SELECT MAX(CustomerId) as maxId FROM ${DatabaseTables.localCustomer}");
+    final maxId = (maxIdRow.first["maxId"] as num?)?.toInt() ?? 0;
+    final localId = maxId > 0 ? maxId + 1 : (DateTime.now().millisecondsSinceEpoch % 100000);
+
+    final localCustomer = CustomerModel(
+      id: localId,
+      customerGuid: "offline-$localId",
+      customerName: request.customerName,
+      mobileNumber: request.mobileNumber,
+      whatsAppNumber: request.whatsAppNumber ?? request.mobileNumber,
+      email: request.email,
+      address: request.address,
+      gstin: request.gstin,
+      emailConsent: request.emailConsent,
+      whatsAppConsent: request.whatsAppConsent,
+      totalInvoicesCount: 0,
+      totalSpent: 0.0,
+      lastVisitDateUtc: null,
+      isActive: true,
+      createdAtUtc: DateTime.now().toUtc(),
+    );
+
+    await db.insert(
+      DatabaseTables.localCustomer,
+      localCustomer.toSqlite(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+
+    // 2. Next: sync with Online DB in background
+    unawaited(_syncCreateCustomerInBackground(localCustomer, request));
+
+    return ApiResponse<CustomerModel>(
+      success: true,
+      message: "Customer created successfully.",
+      data: localCustomer,
+    );
+  }
+
+  Future<void> _syncCreateCustomerInBackground(CustomerModel localCustomer, CreateCustomerRequest request) async {
     try {
       final response = await _dioClient.post(
         ApiEndpoints.customers,
         data: request.toJson(),
       );
-
       if (response.success && response.data != null) {
-        final customer = CustomerModel.fromJson(response.data as Map<String, dynamic>);
-        await _cacheSingleCustomerLocally(customer);
-        return ApiResponse<CustomerModel>(
-          success: true,
-          message: response.message,
-          data: customer,
-        );
+        final serverCustomer = CustomerModel.fromJson(response.data as Map<String, dynamic>);
+        await _cacheSingleCustomerLocally(serverCustomer);
       }
+    } catch (_) {}
+  }
+
+  /// Update Customer (LOCAL DB FIRST -> NEXT ONLINE DB)
+  Future<ApiResponse<CustomerModel>> updateCustomer(int id, UpdateCustomerRequest request) async {
+    // 1. FAST LOCAL-FIRST: Update SQLite immediately
+    final db = await _db.database;
+    final updateMap = <String, dynamic>{
+      "CustomerName": request.customerName,
+      "MobileNumber": request.mobileNumber,
+      if (request.whatsAppNumber != null) "WhatsAppNumber": request.whatsAppNumber,
+      if (request.email != null) "Email": request.email,
+      if (request.address != null) "Address": request.address,
+      if (request.gstin != null) "GSTIN": request.gstin,
+      "EmailConsent": request.emailConsent ? 1 : 0,
+      "WhatsAppConsent": request.whatsAppConsent ? 1 : 0,
+      "IsActive": request.isActive ? 1 : 0,
+    };
+
+    await db.update(
+      DatabaseTables.localCustomer,
+      updateMap,
+      where: "CustomerId = ?",
+      whereArgs: [id],
+    );
+
+    // 2. Next: sync with Online DB in background
+    unawaited(() async {
+      try {
+        await _dioClient.put(
+          "${ApiEndpoints.customers}/$id",
+          data: request.toJson(),
+        );
+      } catch (_) {}
+    }());
+
+    final rows = await db.query(DatabaseTables.localCustomer, where: "CustomerId = ?", whereArgs: [id]);
+    if (rows.isNotEmpty) {
       return ApiResponse<CustomerModel>(
-        success: false,
-        message: response.message,
+        success: true,
+        message: "Customer updated successfully.",
+        data: CustomerModel.fromSqlite(rows.first),
       );
-    } catch (e) {
-      final db = await _db.database;
-      final localId = DateTime.now().millisecondsSinceEpoch % 100000;
-      final customer = CustomerModel(
-        id: localId,
-        customerGuid: "offline-$localId",
+    }
+
+    return ApiResponse<CustomerModel>(
+      success: true,
+      message: "Customer updated successfully.",
+      data: CustomerModel(
+        id: id,
+        customerGuid: "offline-$id",
         customerName: request.customerName,
         mobileNumber: request.mobileNumber,
-        whatsAppNumber: request.whatsAppNumber ?? request.mobileNumber,
+        whatsAppNumber: request.whatsAppNumber,
         email: request.email,
         address: request.address,
         gstin: request.gstin,
@@ -180,88 +288,10 @@ class CustomerRepository {
         totalInvoicesCount: 0,
         totalSpent: 0.0,
         lastVisitDateUtc: null,
-        isActive: true,
+        isActive: request.isActive,
         createdAtUtc: DateTime.now(),
-      );
-
-      await db.insert(
-        DatabaseTables.localCustomer,
-        customer.toSqlite(),
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-
-      return ApiResponse<CustomerModel>(
-        success: true,
-        message: "Customer created locally (offline).",
-        data: customer,
-      );
-    }
-  }
-
-  /// Update Customer
-  Future<ApiResponse<CustomerModel>> updateCustomer(int id, UpdateCustomerRequest request) async {
-    try {
-      final response = await _dioClient.put(
-        "${ApiEndpoints.customers}/$id",
-        data: request.toJson(),
-      );
-
-      if (response.success && response.data != null) {
-        final customer = CustomerModel.fromJson(response.data as Map<String, dynamic>);
-        await _cacheSingleCustomerLocally(customer);
-        return ApiResponse<CustomerModel>(
-          success: true,
-          message: response.message,
-          data: customer,
-        );
-      }
-      return ApiResponse<CustomerModel>(
-        success: false,
-        message: response.message,
-      );
-    } catch (e) {
-      final db = await _db.database;
-      final updateMap = {
-        "CustomerName": request.customerName,
-        "MobileNumber": request.mobileNumber,
-        "WhatsAppNumber": request.whatsAppNumber ?? request.mobileNumber,
-        "Email": request.email,
-        "Address": request.address,
-        "GSTIN": request.gstin,
-        "EmailConsent": request.emailConsent ? 1 : 0,
-        "WhatsAppConsent": request.whatsAppConsent ? 1 : 0,
-        "IsActive": request.isActive ? 1 : 0,
-      };
-
-      await db.update(
-        DatabaseTables.localCustomer,
-        updateMap,
-        where: "CustomerId = ?",
-        whereArgs: [id],
-      );
-
-      return ApiResponse<CustomerModel>(
-        success: true,
-        message: "Customer updated locally (offline).",
-        data: CustomerModel(
-          id: id,
-          customerGuid: "offline-$id",
-          customerName: request.customerName,
-          mobileNumber: request.mobileNumber,
-          whatsAppNumber: request.whatsAppNumber,
-          email: request.email,
-          address: request.address,
-          gstin: request.gstin,
-          emailConsent: request.emailConsent,
-          whatsAppConsent: request.whatsAppConsent,
-          totalInvoicesCount: 0,
-          totalSpent: 0.0,
-          lastVisitDateUtc: null,
-          isActive: request.isActive,
-          createdAtUtc: DateTime.now(),
-        ),
-      );
-    }
+      ),
+    );
   }
 
   /// Get Purchase History

@@ -24,40 +24,45 @@ class StorageService implements IStorageService {
   Future<void> write(String key, String value) async {
     try {
       await _secureStorage.write(key: key, value: value);
-    } catch (_) {
+    } catch (_) {}
+    try {
       await _sharedPreferences.setString(key, value);
-    }
+    } catch (_) {}
   }
 
   @override
   Future<String?> read(String key) async {
     try {
       final value = await _secureStorage.read(key: key);
-      if (value != null) return value;
+      if (value != null && value.isNotEmpty) return value;
     } catch (_) {
-      // Fallback
+      // Fallback to shared_preferences
     }
-    return _sharedPreferences.getString(key);
+    try {
+      return _sharedPreferences.getString(key);
+    } catch (_) {
+      return null;
+    }
   }
 
   @override
   Future<void> delete(String key) async {
     try {
       await _secureStorage.delete(key: key);
-    } catch (_) {
-      // Fallback
-    }
-    await _sharedPreferences.remove(key);
+    } catch (_) {}
+    try {
+      await _sharedPreferences.remove(key);
+    } catch (_) {}
   }
 
   @override
   Future<void> clear() async {
     try {
       await _secureStorage.deleteAll();
-    } catch (_) {
-      // Fallback
-    }
-    await _sharedPreferences.clear();
+    } catch (_) {}
+    try {
+      await _sharedPreferences.clear();
+    } catch (_) {}
   }
 }
 

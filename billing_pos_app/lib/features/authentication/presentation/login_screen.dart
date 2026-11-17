@@ -20,8 +20,8 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _usernameController = TextEditingController(text: "admin");
-  final _passwordController = TextEditingController(text: "Admin@123!");
+  final _usernameController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _obscurePassword = true;
 
   @override
@@ -53,14 +53,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  void _quickFill(String username, String password) {
-    setState(() {
-      _usernameController.text = username;
-      _passwordController.text = password;
-    });
-  }
-
-  Future<void> _handleLogin({bool forceOffline = false}) async {
+  Future<void> _handleLogin() async {
     final username = _usernameController.text.trim();
     final password = _passwordController.text.trim();
 
@@ -72,7 +65,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final success = await ref.read(authNotifierProvider.notifier).login(
       username,
       password,
-      forceOffline: forceOffline,
     );
 
     if (success && mounted) {
@@ -89,6 +81,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         context.go(RouteNames.sadminDashboard);
       } else {
         context.go(RouteNames.adminDashboard);
+      }
+    } else if (mounted) {
+      final err = ref.read(authNotifierProvider).errorMessage;
+      if (err != null && err.isNotEmpty) {
+        AppToast.showError(context, err);
       }
     }
   }
@@ -271,7 +268,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     label: "Username or Mobile Number",
                     controller: _usernameController,
                     prefixIcon: const Icon(Icons.person_outline),
-                    hintText: "e.g. sadmin, admin, cashier",
+                    hintText: "Enter your username",
                   ),
                   const SizedBox(height: 16),
                   AppTextField(
@@ -305,51 +302,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     icon: authState.isLoading ? null : Icons.login,
                     isLoading: authState.isLoading,
                     onPressed: authState.isLoading ? null : _handleLogin,
-                  ),
-                  const SizedBox(height: 10),
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.bolt, size: 18, color: Colors.amber),
-                    label: const Text("⚡ Fast Offline Login (Instant)"),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.primary,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      side: BorderSide(color: AppColors.primary.withValues(alpha: 0.3)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    onPressed: authState.isLoading ? null : () => _handleLogin(forceOffline: true),
-                  ),
-                  const SizedBox(height: 24),
-                  const Divider(),
-                  const SizedBox(height: 12),
-                  const Text(
-                    "Quick Login Profiles:",
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      ActionChip(
-                        avatar: const Icon(Icons.shield_outlined, size: 16, color: Colors.purple),
-                        label: const Text("SAdmin", style: TextStyle(fontSize: 12)),
-                        onPressed: () => _quickFill("sadmin", "SAdmin@123!"),
-                      ),
-                      ActionChip(
-                        avatar: const Icon(Icons.admin_panel_settings_outlined, size: 16, color: AppColors.primary),
-                        label: const Text("Admin", style: TextStyle(fontSize: 12)),
-                        onPressed: () => _quickFill("admin", "Admin@123!"),
-                      ),
-                      ActionChip(
-                        avatar: const Icon(Icons.point_of_sale, size: 16, color: Colors.green),
-                        label: const Text("Cashier", style: TextStyle(fontSize: 12)),
-                        onPressed: () => _quickFill("cashier", "Cashier@123!"),
-                      ),
-                    ],
                   ),
                 ],
               ),

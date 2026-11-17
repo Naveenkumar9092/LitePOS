@@ -1,3 +1,4 @@
+import "dart:async";
 import "package:sqflite/sqflite.dart";
 import "package:billing_pos_app/core/constants/api_endpoints.dart";
 import "package:billing_pos_app/core/database/app_database.dart";
@@ -59,63 +60,51 @@ class OrderRepository {
     return await _getOfflineOrderById(id);
   }
 
-  /// Create a new order (Counter Sale or Takeaway)
+  /// Create a new order (LOCAL DB FIRST -> NEXT ONLINE DB)
   Future<ApiResponse<OrderModel>> createOrder(CreateOrderRequest request) async {
+    // 1. FAST LOCAL-FIRST: Save in SQLite immediately (< 2ms)
+    final offlineOrder = await _createOfflineOrder(request);
+
+    // 2. Next: sync with Online DB in background
+    if (offlineOrder.success && offlineOrder.data != null) {
+      unawaited(_syncOrderInBackground(offlineOrder.data!, request));
+    }
+
+    return offlineOrder;
+  }
+
+  Future<void> _syncOrderInBackground(OrderModel localOrder, CreateOrderRequest request) async {
     try {
       final response = await _dioClient.post(
         ApiEndpoints.orders,
         data: request.toJson(),
       );
-
       if (response.success && response.data != null) {
-        final order = OrderModel.fromJson(response.data as Map<String, dynamic>);
-        await _cacheOrderLocally(order);
-        return ApiResponse<OrderModel>(
-          success: true,
-          message: response.message,
-          data: order,
-        );
+        final serverOrder = OrderModel.fromJson(response.data as Map<String, dynamic>);
+        await _cacheOrderLocally(serverOrder);
       }
-      return ApiResponse<OrderModel>(
-        success: false,
-        message: response.message,
-      );
-    } catch (_) {
-      // Create offline order
-      return await _createOfflineOrder(request);
-    }
+    } catch (_) {}
   }
 
-  /// Update order status
+  /// Update order status (LOCAL DB FIRST -> NEXT ONLINE DB)
   Future<ApiResponse<OrderModel>> updateOrderStatus(int id, OrderStatusEnum status, {String? notes}) async {
-    try {
-      final response = await _dioClient.put(
-        "${ApiEndpoints.orders}/$id/status",
-        data: {
-          "newStatus": status.value,
-          if (notes != null && notes.isNotEmpty) "notes": notes,
-        },
-      );
+    // 1. FAST LOCAL-FIRST: Update SQLite immediately
+    await _updateOfflineOrderStatus(id, status.value);
 
-      if (response.success && response.data != null) {
-        final order = OrderModel.fromJson(response.data as Map<String, dynamic>);
-        await _cacheOrderLocally(order);
-        return ApiResponse<OrderModel>(
-          success: true,
-          message: response.message,
-          data: order,
+    // 2. Next: sync with Online DB in background
+    unawaited(() async {
+      try {
+        await _dioClient.put(
+          "${ApiEndpoints.orders}/$id/status",
+          data: {
+            "newStatus": status.value,
+            if (notes != null && notes.isNotEmpty) "notes": notes,
+          },
         );
-      }
-      return ApiResponse<OrderModel>(
-        success: false,
-        message: response.message,
-      );
-    } catch (e) {
-      // Offline fallback: update local record
-      await _updateOfflineOrderStatus(id, status.value);
-      final offlineOrder = await _getOfflineOrderById(id);
-      return offlineOrder;
-    }
+      } catch (_) {}
+    }());
+
+    return await _getOfflineOrderById(id);
   }
 
   /// Cancel an order with a reason

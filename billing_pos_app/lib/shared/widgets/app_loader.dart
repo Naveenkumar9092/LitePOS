@@ -31,7 +31,7 @@ class AppLoader extends StatefulWidget {
 
   const AppLoader.fullscreen({
     super.key,
-    this.message = "Loading Pooja POS...",
+    this.message = "Loading PulsePOS...",
     this.size = 54.0,
     this.primaryColor = AppColors.primary,
     this.secondaryColor = AppColors.primaryDark,

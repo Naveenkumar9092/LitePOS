@@ -101,7 +101,7 @@ class _PaymentDialogState extends State<PaymentDialog> {
                           style: GoogleFonts.dmSans(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
                         ),
                         Text(
-                          "Pooja Sweets & Cafe Billing Checkout",
+                          "PulsePOS Billing Checkout",
                           style: GoogleFonts.dmSans(fontSize: 11, color: AppColors.textSecondary),
                         ),
                       ],

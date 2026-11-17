@@ -1,11 +1,17 @@
+import "dart:typed_data";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "../data/hardware_repository.dart";
+import "../models/discovered_printer_model.dart";
 import "../models/printer_model.dart";
+import "../services/esc_pos_generator.dart";
+import "../services/printer_driver_service.dart";
 
 class HardwareState {
   final bool isLoading;
   final bool isPrinting;
+  final bool isScanning;
   final List<PrinterConfigurationModel> printers;
+  final List<DiscoveredPrinterModel> discoveredPrinters;
   final PrinterConfigurationModel? defaultPrinter;
   final TestPrintResultModel? lastTestPrint;
   final CashDrawerCommandModel? lastDrawerCommand;
@@ -16,7 +22,9 @@ class HardwareState {
   const HardwareState({
     this.isLoading = false,
     this.isPrinting = false,
+    this.isScanning = false,
     this.printers = const [],
+    this.discoveredPrinters = const [],
     this.defaultPrinter,
     this.lastTestPrint,
     this.lastDrawerCommand,
@@ -28,7 +36,9 @@ class HardwareState {
   HardwareState copyWith({
     bool? isLoading,
     bool? isPrinting,
+    bool? isScanning,
     List<PrinterConfigurationModel>? printers,
+    List<DiscoveredPrinterModel>? discoveredPrinters,
     PrinterConfigurationModel? defaultPrinter,
     TestPrintResultModel? lastTestPrint,
     CashDrawerCommandModel? lastDrawerCommand,
@@ -40,7 +50,9 @@ class HardwareState {
     return HardwareState(
       isLoading: isLoading ?? this.isLoading,
       isPrinting: isPrinting ?? this.isPrinting,
+      isScanning: isScanning ?? this.isScanning,
       printers: printers ?? this.printers,
+      discoveredPrinters: discoveredPrinters ?? this.discoveredPrinters,
       defaultPrinter: clearDefaultPrinter ? null : (defaultPrinter ?? this.defaultPrinter),
       lastTestPrint: lastTestPrint ?? this.lastTestPrint,
       lastDrawerCommand: lastDrawerCommand ?? this.lastDrawerCommand,
@@ -110,7 +122,7 @@ class HardwareNotifier extends StateNotifier<HardwareState> {
       } else {
         state = state.copyWith(
           isLoading: false,
-          errorMessage: res.message.isNotEmpty ? res.message : "Failed to create printer.",
+          errorMessage: res.message.isNotEmpty ? res.message : "Failed to add printer.",
         );
         return false;
       }
@@ -280,6 +292,72 @@ class HardwareNotifier extends StateNotifier<HardwareState> {
       );
       return null;
     }
+  }
+
+  // ─── NEW SCANNING & DIRECT HARDWARE PRINTING ──────────────────────
+
+  /// Scans for available Bluetooth, USB, or Network printers.
+  Future<List<DiscoveredPrinterModel>> scanPrinters(PrinterConnectionType type) async {
+    state = state.copyWith(isScanning: true, errorMessage: null);
+    try {
+      final devices = await PrinterDriverService.scanPrinters(type);
+      state = state.copyWith(
+        isScanning: false,
+        discoveredPrinters: devices,
+        successMessage: "Discovered ${devices.length} ${type.name} printer(s).",
+      );
+      return devices;
+    } catch (e) {
+      state = state.copyWith(
+        isScanning: false,
+        errorMessage: "Scan failed: $e",
+      );
+      return [];
+    }
+  }
+
+  /// Sends raw ESC/POS bytes directly to the specified printer hardware.
+  Future<bool> directPrintRaw(PrinterConfigurationModel config, Uint8List bytes) async {
+    state = state.copyWith(isPrinting: true, errorMessage: null);
+    try {
+      final success = await PrinterDriverService.printRawBytes(config, bytes);
+      state = state.copyWith(
+        isPrinting: false,
+        successMessage: success ? "Printed successfully on '${config.printerName}'" : null,
+        errorMessage: success ? null : "Printing failed on '${config.printerName}'",
+      );
+      return success;
+    } catch (e) {
+      state = state.copyWith(
+        isPrinting: false,
+        errorMessage: "Print error: $e",
+      );
+      return false;
+    }
+  }
+
+  /// Generates and immediately transmits a test print receipt to physical printer hardware.
+  Future<bool> directTestPrint(PrinterConfigurationModel config) async {
+    final bytes = EscPosGenerator.buildTestReceipt(config);
+    return directPrintRaw(config, bytes);
+  }
+
+  /// Prints a Kitchen Order Token (KOT) directly to the target printer.
+  Future<bool> directPrintToken({
+    required PrinterConfigurationModel config,
+    required List<TokenItemModel> items,
+    required String orderId,
+    required String tokenNumber,
+    bool isEstimate = false,
+  }) async {
+    final bytes = EscPosGenerator.buildTokenReceipt(
+      items: items,
+      orderId: orderId,
+      tokenNumber: tokenNumber,
+      isEstimate: isEstimate,
+      config: config,
+    );
+    return directPrintRaw(config, bytes);
   }
 
   void clearMessages() {

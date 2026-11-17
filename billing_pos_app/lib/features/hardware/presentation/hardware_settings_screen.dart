@@ -2,6 +2,7 @@ import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:billing_pos_app/core/theme/app_colors.dart";
 import "package:billing_pos_app/features/authentication/presentation/auth_state.dart";
+import "../models/discovered_printer_model.dart";
 import "../models/printer_model.dart";
 import "hardware_state.dart";
 
@@ -23,24 +24,33 @@ class _HardwareSettingsScreenState extends ConsumerState<HardwareSettingsScreen>
 
     ref.listen<HardwareState>(hardwareNotifierProvider, (previous, next) {
       if (next.errorMessage != null && next.errorMessage != previous?.errorMessage) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(next.errorMessage!),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(next.errorMessage!),
+                backgroundColor: AppColors.error,
+              ),
+            );
+          }
+        });
       }
       if (next.successMessage != null && next.successMessage != previous?.successMessage) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(next.successMessage!),
-            backgroundColor: AppColors.primary,
-          ),
-        );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(next.successMessage!),
+                backgroundColor: AppColors.primary,
+              ),
+            );
+          }
+        });
       }
     });
 
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text("Hardware & Thermal Printers"),
         actions: [
@@ -632,6 +642,29 @@ class _HardwareSettingsScreenState extends ConsumerState<HardwareSettingsScreen>
             ),
           ),
           actions: [
+            FilledButton.icon(
+              icon: const Icon(Icons.print, size: 16),
+              label: const Text("Direct Physical Print"),
+              onPressed: () async {
+                Navigator.of(ctx).pop();
+                final state = ref.read(hardwareNotifierProvider);
+                final printer = state.printers.firstWhere(
+                  (p) => p.id == printerId,
+                  orElse: () => state.defaultPrinter ?? PrinterConfigurationModel(id: printerId, printerName: result.printerName),
+                );
+                final ok = await ref.read(hardwareNotifierProvider.notifier).directTestPrint(printer);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(ok
+                          ? "Test receipt sent to '${printer.printerName}'!"
+                          : "Could not transmit to physical printer. Verify device is paired or IP is reachable."),
+                      backgroundColor: ok ? AppColors.primary : AppColors.error,
+                    ),
+                  );
+                }
+              },
+            ),
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
               child: const Text("Close"),
@@ -683,7 +716,7 @@ class _HardwareSettingsScreenState extends ConsumerState<HardwareSettingsScreen>
   }
 }
 
-class _PrinterFormDialog extends StatefulWidget {
+class _PrinterFormDialog extends ConsumerStatefulWidget {
   final PrinterConfigurationModel? printer;
   final Future<void> Function(PrinterConfigurationModel) onSave;
 
@@ -693,10 +726,10 @@ class _PrinterFormDialog extends StatefulWidget {
   });
 
   @override
-  State<_PrinterFormDialog> createState() => _PrinterFormDialogState();
+  ConsumerState<_PrinterFormDialog> createState() => _PrinterFormDialogState();
 }
 
-class _PrinterFormDialogState extends State<_PrinterFormDialog> {
+class _PrinterFormDialogState extends ConsumerState<_PrinterFormDialog> {
   final _formKey = GlobalKey<FormState>();
 
   late TextEditingController _nameController;
@@ -785,6 +818,19 @@ class _PrinterFormDialogState extends State<_PrinterFormDialog> {
                   onSelectionChanged: (set) {
                     setState(() => _connectionType = set.first);
                   },
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.radar, size: 16),
+                    label: Text("Scan for ${_connectionType.name.toUpperCase()} Printers"),
+                    onPressed: () => _scanAndPickPrinter(context),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 16),
                 if (_connectionType == PrinterConnectionType.network) ...[
@@ -910,6 +956,115 @@ class _PrinterFormDialogState extends State<_PrinterFormDialog> {
         ),
       ],
     );
+  }
+
+  Future<void> _scanAndPickPrinter(BuildContext context) async {
+    final notifier = ref.read(hardwareNotifierProvider.notifier);
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (scanCtx) {
+        return FutureBuilder<List<DiscoveredPrinterModel>>(
+          future: notifier.scanPrinters(_connectionType),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return AlertDialog(
+                title: Row(
+                  children: [
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    const SizedBox(width: 12),
+                    Text("Scanning ${_connectionType.name.toUpperCase()}..."),
+                  ],
+                ),
+                content: const Text(
+                  "Discovering nearby paired Bluetooth devices, connected USB printers, or network printers on port 9100...",
+                  style: TextStyle(fontSize: 13),
+                ),
+              );
+            }
+
+            final list = snapshot.data ?? [];
+            return AlertDialog(
+              title: Text("Discovered ${_connectionType.name.toUpperCase()} Printers (${list.length})"),
+              content: SizedBox(
+                width: 380,
+                height: 260,
+                child: list.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.print_disabled, size: 48, color: Colors.grey.shade400),
+                            const SizedBox(height: 12),
+                            Text(
+                              "No ${_connectionType.name} printers detected.",
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              _connectionType == PrinterConnectionType.bluetooth
+                                  ? "Pair your thermal printer in Android Bluetooth settings first."
+                                  : _connectionType == PrinterConnectionType.usb
+                                      ? "Verify USB OTG cable connection and printer power."
+                                      : "Ensure printer is connected to local Wi-Fi / LAN with port 9100 open.",
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontSize: 12, color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: list.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (ctx, index) {
+                          final item = list[index];
+                          return ListTile(
+                            leading: Icon(
+                              _connectionType == PrinterConnectionType.bluetooth
+                                  ? Icons.bluetooth
+                                  : _connectionType == PrinterConnectionType.usb
+                                      ? Icons.usb
+                                      : Icons.lan,
+                              color: AppColors.primary,
+                            ),
+                            title: Text(item.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                            subtitle: Text(item.address, style: const TextStyle(fontSize: 12)),
+                            onTap: () {
+                              Navigator.of(scanCtx).pop(item);
+                            },
+                          );
+                        },
+                      ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(scanCtx).pop(),
+                  child: const Text("Close"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    ).then((selected) {
+      if (selected is DiscoveredPrinterModel) {
+        setState(() {
+          _nameController.text = selected.name;
+          if (_connectionType == PrinterConnectionType.bluetooth) {
+            _btMacController.text = selected.address;
+          } else if (_connectionType == PrinterConnectionType.usb) {
+            _usbNameController.text = selected.address;
+          } else if (_connectionType == PrinterConnectionType.network) {
+            _ipController.text = selected.address;
+            _portController.text = selected.port.toString();
+          }
+        });
+      }
+    });
   }
 
   Future<void> _submit() async {

@@ -18,6 +18,27 @@ class DatabaseTables {
   static const String localSyncLog = "LocalSyncLog";
   static const String localDeviceState = "LocalDeviceState";
 
+  static const List<String> allTables = [
+    localCompany,
+    localShop,
+    localUser,
+    localProduct,
+    localCategory,
+    localCustomer,
+    localOrder,
+    localOrderDetail,
+    localInvoice,
+    localInvoiceDetail,
+    localPayment,
+    localTax,
+    localHsnSac,
+    localGstConfig,
+    localCreditNote,
+    localSyncOutbox,
+    localSyncLog,
+    localDeviceState,
+  ];
+
   static const String createCompanyTable = """
     CREATE TABLE $localCompany (
       CompanyId INTEGER PRIMARY KEY,
@@ -58,6 +79,7 @@ class DatabaseTables {
   static const String createUserTable = """
     CREATE TABLE $localUser (
       UserId INTEGER PRIMARY KEY,
+      CompanyId INTEGER NOT NULL DEFAULT 1,
       FullName TEXT NOT NULL,
       Username TEXT NOT NULL UNIQUE,
       Email TEXT,

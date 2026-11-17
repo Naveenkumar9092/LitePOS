@@ -1,4 +1,4 @@
-﻿// ignore_for_file: prefer_const_constructors
+// ignore_for_file: prefer_const_constructors
 import "dart:convert";
 import "dart:typed_data";
 import "package:flutter/material.dart";
@@ -268,7 +268,7 @@ class SoftcopyService {
                 child: pw.Column(
                   children: [
                     pw.Text(
-                      "THANK YOU FOR VISITING POOJA SWEETS & CAFE!",
+                      "THANK YOU FOR YOUR VISIT!",
                       style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800),
                     ),
                     pw.SizedBox(height: 2),
@@ -293,8 +293,8 @@ class SoftcopyService {
 
   Future<Uint8List> generateOrderInvoicePdf(
     OrderModel order, {
-    String shopName = "Pooja Sweets & Cafe",
-    String companyName = "Pooja Sweets & Cafe Pvt Ltd",
+    String shopName = "PulsePOS Store",
+    String companyName = "PulsePOS Retail",
   }) async {
     final pdf = pw.Document(
       title: "Order ${order.orderNumber}",
@@ -693,8 +693,8 @@ class SoftcopyService {
 
   Future<Uint8List> generateReportPdf({
     required ReportState state,
-    String shopName = "Pooja Sweets & Cafe",
-    String companyName = "Pooja Sweets & Cafe Pvt Ltd",
+    String shopName = "PulsePOS Store",
+    String companyName = "PulsePOS Retail",
   }) async {
     final pdf = pw.Document(
       title: "Business Analytics Report",
@@ -887,7 +887,7 @@ class SoftcopyService {
   // 4. REPORT CSV GENERATION
   // ==========================================
 
-  String generateReportCsv(ReportState state, {String shopName = "Pooja Sweets & Cafe"}) {
+  String generateReportCsv(ReportState state, {String shopName = "PulsePOS Store"}) {
     final buffer = StringBuffer();
     final summary = state.summary;
 

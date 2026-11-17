@@ -1,3 +1,4 @@
+import "dart:async";
 import "package:sqflite/sqflite.dart";
 import "package:billing_pos_app/core/constants/api_endpoints.dart";
 import "package:billing_pos_app/core/database/app_database.dart";
@@ -12,62 +13,60 @@ class PaymentRepository {
 
   PaymentRepository(this._dioClient, this._db);
 
-  /// Process single payment
+  /// Process single payment (LOCAL DB FIRST -> NEXT ONLINE DB)
   Future<ApiResponse<PaymentTransactionModel>> processPayment(ProcessPaymentRequest request) async {
+    // 1. FAST LOCAL-FIRST: Save payment in SQLite immediately (< 2ms)
+    final offlinePayment = await _createOfflinePayment(request);
+
+    // 2. Next: sync with Online DB in background
+    if (offlinePayment.success && offlinePayment.data != null) {
+      unawaited(_syncPaymentInBackground(offlinePayment.data!, request));
+    }
+
+    return offlinePayment;
+  }
+
+  Future<void> _syncPaymentInBackground(PaymentTransactionModel localPayment, ProcessPaymentRequest request) async {
     try {
       final response = await _dioClient.post(
         ApiEndpoints.payments,
         data: request.toJson(),
       );
-
       if (response.success && response.data != null) {
-        final payment = PaymentTransactionModel.fromJson(response.data as Map<String, dynamic>);
-        await _cachePaymentLocally(payment);
-        return ApiResponse<PaymentTransactionModel>(
-          success: true,
-          message: response.message,
-          data: payment,
-        );
+        final serverPayment = PaymentTransactionModel.fromJson(response.data as Map<String, dynamic>);
+        await _cachePaymentLocally(serverPayment);
       }
-      return ApiResponse<PaymentTransactionModel>(
-        success: false,
-        message: response.message,
-      );
-    } catch (_) {
-      // Offline fallback
-      return await _createOfflinePayment(request);
-    }
+    } catch (_) {}
   }
 
-  /// Process split payment
+  /// Process split payment (LOCAL DB FIRST -> NEXT ONLINE DB)
   Future<ApiResponse<List<PaymentTransactionModel>>> processSplitPayment(ProcessSplitPaymentRequest request) async {
+    // 1. FAST LOCAL-FIRST: Save split payments in SQLite immediately (< 2ms)
+    final offlineSplit = await _createOfflineSplitPayment(request);
+
+    // 2. Next: sync with Online DB in background
+    if (offlineSplit.success && offlineSplit.data != null) {
+      unawaited(_syncSplitPaymentInBackground(offlineSplit.data!, request));
+    }
+
+    return offlineSplit;
+  }
+
+  Future<void> _syncSplitPaymentInBackground(List<PaymentTransactionModel> list, ProcessSplitPaymentRequest request) async {
     try {
       final response = await _dioClient.post(
         ApiEndpoints.splitPayment,
         data: request.toJson(),
       );
-
       if (response.success && response.data != null) {
-        final list = (response.data as List<dynamic>)
+        final serverList = (response.data as List<dynamic>)
             .map((e) => PaymentTransactionModel.fromJson(e as Map<String, dynamic>))
             .toList();
-        for (final p in list) {
+        for (final p in serverList) {
           await _cachePaymentLocally(p);
         }
-        return ApiResponse<List<PaymentTransactionModel>>(
-          success: true,
-          message: response.message,
-          data: list,
-        );
       }
-      return ApiResponse<List<PaymentTransactionModel>>(
-        success: false,
-        message: response.message,
-      );
-    } catch (_) {
-      // Offline fallback
-      return await _createOfflineSplitPayment(request);
-    }
+    } catch (_) {}
   }
 
   /// Process refund

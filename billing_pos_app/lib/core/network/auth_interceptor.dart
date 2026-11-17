@@ -16,7 +16,20 @@ class AuthInterceptor extends Interceptor {
   ) async {
     final token = await _storageService.read(AppConstants.tokenKey);
     if (token != null && token.isNotEmpty) {
-      options.headers["Authorization"] = "Bearer $token";
+      if (token.startsWith("offline-token")) {
+        // In offline mode, do not dispatch protected cloud HTTP requests to avoid 401 unauthorized errors in browser DevTools.
+        if (!options.path.contains("/auth/")) {
+          return handler.reject(
+            DioException(
+              requestOptions: options,
+              type: DioExceptionType.cancel,
+              error: "Offline mode active: using local database",
+            ),
+          );
+        }
+      } else {
+        options.headers["Authorization"] = "Bearer $token";
+      }
     }
 
     final deviceId = await _storageService.read(AppConstants.deviceIdKey);
@@ -33,8 +46,15 @@ class AuthInterceptor extends Interceptor {
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) async {
     if (err.response?.statusCode == 401) {
-      await _storageService.delete(AppConstants.tokenKey);
-      appRouter.go(RouteNames.login);
+      final path = err.requestOptions.path;
+      // Avoid redirect loops during logout or login attempts
+      if (!path.contains("/auth/logout") && !path.contains("/auth/login")) {
+        final token = await _storageService.read(AppConstants.tokenKey);
+        if (token != null && !token.startsWith("offline-token")) {
+          await _storageService.delete(AppConstants.tokenKey);
+          appRouter.go(RouteNames.login);
+        }
+      }
     }
     return handler.next(err);
   }

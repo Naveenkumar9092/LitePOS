@@ -1,8 +1,10 @@
+import "dart:typed_data";
 import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:flutter_test/flutter_test.dart";
 import "package:billing_pos_app/features/authentication/presentation/auth_state.dart";
 import "package:billing_pos_app/features/authentication/models/user_model.dart";
+import "package:billing_pos_app/features/hardware/models/discovered_printer_model.dart";
 import "package:billing_pos_app/features/hardware/models/printer_model.dart";
 import "package:billing_pos_app/features/hardware/presentation/hardware_settings_screen.dart";
 import "package:billing_pos_app/features/hardware/presentation/hardware_state.dart";
@@ -33,6 +35,24 @@ class FakeHardwareNotifier extends StateNotifier<HardwareState> implements Hardw
 
   @override
   Future<ReceiptPrintResultModel?> getInvoiceReceipt(int invoiceId, {int? printerId}) async => null;
+
+  @override
+  Future<List<DiscoveredPrinterModel>> scanPrinters(PrinterConnectionType type) async => [];
+
+  @override
+  Future<bool> directPrintRaw(PrinterConfigurationModel config, Uint8List bytes) async => true;
+
+  @override
+  Future<bool> directTestPrint(PrinterConfigurationModel config) async => true;
+
+  @override
+  Future<bool> directPrintToken({
+    required PrinterConfigurationModel config,
+    required List<TokenItemModel> items,
+    required String orderId,
+    required String tokenNumber,
+    bool isEstimate = false,
+  }) async => true;
 
   @override
   void clearMessages() {}

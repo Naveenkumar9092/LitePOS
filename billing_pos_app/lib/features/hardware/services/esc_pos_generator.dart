@@ -1,5 +1,6 @@
 import "dart:convert";
 import "dart:typed_data";
+import "../models/discovered_printer_model.dart";
 import "../models/printer_model.dart";
 
 /// Pure Dart ESC/POS byte builder for thermal receipt printers (80mm & 58mm).
@@ -161,6 +162,48 @@ class EscPosGenerator {
     return this;
   }
 
+  /// Generates a standard Model 2 ESC/POS QR Code byte command sequence.
+  EscPosGenerator qrCode(String data, {int size = 5}) {
+    final dataBytes = utf8.encode(data);
+    final dataLength = dataBytes.length;
+
+    // 1. QR Code Model 2: 1D 28 6B 04 00 31 41 32 00
+    _builder.add(Uint8List.fromList([gs, 0x28, 0x6B, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00]));
+
+    // 2. QR Code Module Size (1-8, default 5): 1D 28 6B 03 00 31 43 <size>
+    final safeSize = size.clamp(1, 8);
+    _builder.add(Uint8List.fromList([gs, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43, safeSize]));
+
+    // 3. Error Correction Level M: 1D 28 6B 03 00 31 45 31
+    _builder.add(Uint8List.fromList([gs, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x45, 0x31]));
+
+    // 4. Store Data: 1D 28 6B pL pH 31 50 30 <data>
+    final pL = (dataLength + 3) % 256;
+    final pH = (dataLength + 3) ~/ 256;
+    _builder.add(Uint8List.fromList([gs, 0x28, 0x6B, pL, pH, 0x31, 0x50, 0x30]));
+    _builder.add(dataBytes);
+
+    // 5. Print QR Code: 1D 28 6B 03 00 31 51 30
+    _builder.add(Uint8List.fromList([gs, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x51, 0x30]));
+    feed(1);
+    return this;
+  }
+
+  /// Appends dynamic NPCI UPI Payment QR Code.
+  EscPosGenerator upiPaymentQr({
+    required String upiId,
+    required double amount,
+    String merchantName = "Merchant",
+  }) {
+    final upiUrl = "upi://pay?pa=$upiId&pn=$merchantName&am=${amount.toStringAsFixed(2)}&cu=INR";
+    center();
+    textLine("Scan To Pay (UPI):", bold: true);
+    qrCode(upiUrl, size: 5);
+    textLine("Amount: Rs. ${amount.toStringAsFixed(2)}", bold: true);
+    left();
+    return this;
+  }
+
   EscPosGenerator kickCashDrawer() {
     _builder.add(openCashDrawer);
     return this;
@@ -185,7 +228,7 @@ class EscPosGenerator {
     final gen = EscPosGenerator.fromModel(config);
     gen.center();
     gen.textLine("=== TEST PRINT ===", bold: true, doubleSize: true);
-    gen.textLine("LitePOS Billing System");
+    gen.textLine("PulsePOS / LitePOS Billing System");
     gen.textLine("Date: ${DateTime.now().toLocal().toString().split('.')[0]}");
     gen.left();
     gen.divider();
@@ -217,5 +260,164 @@ class EscPosGenerator {
     }
     return gen.toBytes();
   }
-}
 
+  /// Builds a Kitchen Order Token (KOT) / Order Token matching the sample printer specification.
+  static Uint8List buildTokenReceipt({
+    required List<TokenItemModel> items,
+    required String orderId,
+    required String tokenNumber,
+    String? title,
+    bool isEstimate = false,
+    PrinterConfigurationModel? config,
+    PrinterPaperSize paperSize = PrinterPaperSize.mm80,
+  }) {
+    final effectivePaperSize = config?.paperSize ?? paperSize;
+    final gen = EscPosGenerator(
+      columns: effectivePaperSize == PrinterPaperSize.mm58 ? 32 : 48,
+      paperSize: effectivePaperSize,
+    );
+
+    final now = DateTime.now();
+    final dateStr = "${now.day.toString().padLeft(2, '0')}-${now.month.toString().padLeft(2, '0')}-${now.year}";
+    final timeStr = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+
+    gen.center();
+    final heading = isEstimate ? "TOKEN (Estimate)" : (title ?? "KITCHEN ORDER TOKEN");
+    gen.textLine(heading, bold: true, doubleSize: true);
+    gen.feed(1);
+    gen.left();
+
+    gen.row("Bill No: $orderId", "$dateStr $timeStr");
+    gen.divider("-");
+
+    if (effectivePaperSize == PrinterPaperSize.mm58) {
+      gen.table3Col("Item", "Qty", "Price");
+      gen.divider("-");
+      for (final item in items) {
+        final name = item.itemName.length > 14 ? item.itemName.substring(0, 14) : item.itemName;
+        gen.table3Col(name, item.quantity.toStringAsFixed(0), item.amount.toStringAsFixed(0));
+      }
+    } else {
+      gen.table4Col("S.No Item", "Qty", "Rate", "Price");
+      gen.divider("-");
+      for (final item in items) {
+        final label = "${item.slNo}. ${item.itemName}";
+        gen.table4Col(
+          label,
+          item.quantity.toStringAsFixed(0),
+          item.rate.toStringAsFixed(0),
+          item.amount.toStringAsFixed(0),
+        );
+      }
+    }
+
+    gen.divider("=");
+    gen.center();
+    gen.textLine("YOUR ORDER NO: $tokenNumber", bold: true, doubleSize: true);
+    gen.feed(2);
+
+    if (config?.autoCutReceipt ?? true) {
+      gen.cut(full: false);
+    }
+    return gen.toBytes();
+  }
+
+  /// Builds a customer retail invoice thermal receipt.
+  static Uint8List buildInvoiceReceipt({
+    required PrinterConfigurationModel config,
+    required String shopName,
+    required String invoiceNumber,
+    required String cashierName,
+    required String customerName,
+    required String customerMobile,
+    required List<Map<String, dynamic>> items,
+    required double subTotal,
+    required double discountAmount,
+    required double taxAmount,
+    required double grandTotal,
+    required String paymentMode,
+    String? upiId,
+    String? footerNote,
+  }) {
+    final gen = EscPosGenerator.fromModel(config);
+
+    // Header
+    gen.center();
+    gen.textLine(shopName, bold: true, doubleSize: true);
+    if (config.headerCustomText != null && config.headerCustomText!.isNotEmpty) {
+      gen.textLine(config.headerCustomText!);
+    }
+    gen.feed(1);
+    gen.left();
+
+    final now = DateTime.now();
+    final dateStr = "${now.day.toString().padLeft(2, '0')}-${now.month.toString().padLeft(2, '0')}-${now.year} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+    gen.row("Invoice #: $invoiceNumber", dateStr);
+    gen.row("Cashier: $cashierName", "Mode: $paymentMode");
+    if (customerMobile.isNotEmpty) {
+      gen.row("Customer: $customerName", customerMobile);
+    }
+    gen.divider("-");
+
+    // Items Table
+    if (config.paperSize == PrinterPaperSize.mm58) {
+      gen.table3Col("Item", "Qty", "Amount");
+      gen.divider("-");
+      for (final it in items) {
+        final name = (it["productName"] as String? ?? "Item");
+        final qty = (it["quantity"] as num?)?.toInt() ?? 1;
+        final total = (it["lineTotal"] as num?)?.toDouble() ?? 0.0;
+        final truncatedName = name.length > 14 ? name.substring(0, 14) : name;
+        gen.table3Col(truncatedName, qty.toString(), total.toStringAsFixed(2));
+      }
+    } else {
+      gen.table4Col("Item", "Qty", "Rate", "Amount");
+      gen.divider("-");
+      for (final it in items) {
+        final name = (it["productName"] as String? ?? "Item");
+        final qty = (it["quantity"] as num?)?.toInt() ?? 1;
+        final rate = (it["unitPrice"] as num?)?.toDouble() ?? 0.0;
+        final total = (it["lineTotal"] as num?)?.toDouble() ?? 0.0;
+        gen.table4Col(name, qty.toString(), rate.toStringAsFixed(2), total.toStringAsFixed(2));
+      }
+    }
+
+    gen.divider("-");
+    gen.row("Sub Total:", "Rs. ${subTotal.toStringAsFixed(2)}");
+    if (discountAmount > 0) {
+      gen.row("Discount:", "-Rs. ${discountAmount.toStringAsFixed(2)}");
+    }
+    if (taxAmount > 0) {
+      gen.row("GST Tax:", "Rs. ${taxAmount.toStringAsFixed(2)}");
+    }
+    gen.divider("=");
+    gen.row("GRAND TOTAL:", "Rs. ${grandTotal.toStringAsFixed(2)}");
+    gen.divider("=");
+
+    // Dynamic UPI QR Code
+    if (config.printQrCode && upiId != null && upiId.isNotEmpty && grandTotal > 0) {
+      gen.feed(1);
+      gen.upiPaymentQr(upiId: upiId, amount: grandTotal, merchantName: shopName);
+    }
+
+    // Footer
+    gen.center();
+    if (footerNote != null && footerNote.isNotEmpty) {
+      gen.textLine(footerNote);
+    } else if (config.footerCustomText != null && config.footerCustomText!.isNotEmpty) {
+      gen.textLine(config.footerCustomText!);
+    } else {
+      gen.textLine("Thank You! Visit Again", bold: true);
+    }
+    gen.feed(2);
+
+    if (config.openCashDrawer) {
+      gen.kickCashDrawer();
+    }
+    if (config.autoCutReceipt) {
+      gen.cut();
+    }
+
+    return gen.toBytes();
+  }
+}

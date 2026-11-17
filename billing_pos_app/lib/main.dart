@@ -3,7 +3,6 @@ import "dart:ui";
 import "package:flutter/foundation.dart";
 import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
-import "package:go_router/go_router.dart";
 import "package:google_fonts/google_fonts.dart";
 import "package:sqflite_common_ffi/sqflite_ffi.dart";
 import "package:sqflite_common_ffi_web/sqflite_ffi_web.dart";
@@ -13,6 +12,7 @@ import "core/routing/route_names.dart";
 import "core/storage/storage_service.dart";
 import "core/theme/app_theme.dart";
 import "features/authentication/models/user_model.dart";
+import "features/authentication/presentation/auth_state.dart";
 import "features/company/data/company_repository.dart";
 
 class AppScrollBehavior extends MaterialScrollBehavior {
@@ -51,6 +51,7 @@ void main() async {
 
   // Persistent login: auto-detect saved session so app restart never logs out
   String initialRoute = RouteNames.login;
+  UserModel? savedUser;
   final userJson = await storageService.read("current_user_json");
   final token = await storageService.read(AppConstants.tokenKey);
 
@@ -58,6 +59,7 @@ void main() async {
     try {
       final map = jsonDecode(userJson) as Map<String, dynamic>;
       final user = UserModel.fromJson(map);
+      savedUser = user;
       if (user.isCashier) {
         initialRoute = RouteNames.posBilling;
       } else if (user.isSAdmin) {
@@ -67,6 +69,7 @@ void main() async {
       }
     } catch (_) {
       initialRoute = RouteNames.login;
+      savedUser = null;
     }
   }
 
@@ -74,6 +77,7 @@ void main() async {
     ProviderScope(
       overrides: [
         storageServiceProvider.overrideWithValue(storageService),
+        initialUserProvider.overrideWithValue(savedUser),
       ],
       child: LitePOSApp(initialRoute: initialRoute),
     ),
@@ -89,12 +93,20 @@ class LitePOSApp extends StatefulWidget {
 }
 
 class _LitePOSAppState extends State<LitePOSApp> {
-  late final GoRouter _router;
-
   @override
   void initState() {
     super.initState();
-    _router = createAppRouter(initialLocation: widget.initialRoute);
+    if (widget.initialRoute != RouteNames.login) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (kIsWeb) {
+          final frag = Uri.base.fragment;
+          if (frag.isNotEmpty && frag != "/" && frag != RouteNames.login) {
+            return;
+          }
+        }
+        appRouter.go(widget.initialRoute);
+      });
+    }
   }
 
   @override
@@ -106,7 +118,7 @@ class _LitePOSAppState extends State<LitePOSApp> {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.light,
-      routerConfig: _router,
+      routerConfig: appRouter,
     );
   }
 }

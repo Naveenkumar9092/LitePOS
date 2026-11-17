@@ -1,6 +1,7 @@
 class UserModel {
   final int id;
   final int companyId;
+  final String? companyName;
   final int? shopId;
   final String fullName;
   final String username;
@@ -16,6 +17,7 @@ class UserModel {
   UserModel({
     required this.id,
     required this.companyId,
+    this.companyName,
     this.shopId,
     required this.fullName,
     required this.username,
@@ -38,6 +40,7 @@ class UserModel {
     return UserModel(
       id: (json["id"] as num).toInt(),
       companyId: (json["companyId"] as num?)?.toInt() ?? 1,
+      companyName: json["companyName"]?.toString(),
       shopId: (json["shopId"] as num?)?.toInt(),
       fullName: json["fullName"]?.toString() ?? "",
       username: json["username"]?.toString() ?? "",
@@ -60,6 +63,7 @@ class UserModel {
     return {
       "id": id,
       "companyId": companyId,
+      "companyName": companyName,
       "shopId": shopId,
       "fullName": fullName,
       "username": username,
@@ -77,7 +81,8 @@ class UserModel {
   factory UserModel.fromSqlite(Map<String, dynamic> map) {
     return UserModel(
       id: (map["UserId"] as num).toInt(),
-      companyId: 1,
+      companyId: (map["CompanyId"] as num?)?.toInt() ?? 1,
+      companyName: map["CompanyName"]?.toString(),
       shopId: null,
       fullName: map["FullName"]?.toString() ?? "",
       username: map["Username"]?.toString() ?? "",
@@ -94,6 +99,7 @@ class UserModel {
   Map<String, dynamic> toSqlite() {
     return {
       "UserId": id,
+      "CompanyId": companyId,
       "FullName": fullName,
       "Username": username,
       "Email": email,

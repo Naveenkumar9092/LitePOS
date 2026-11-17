@@ -68,13 +68,14 @@ class _FoundationShellState extends ConsumerState<FoundationShell> {
     if (location.startsWith("/orders")) return 2;
     if (location.startsWith("/payments")) return 3;
     if (location.startsWith("/products") || location.startsWith("/categories")) return 4;
-    if (location.startsWith("/gst-settings")) return 5;
-    if (location.startsWith("/customers")) return 6;
-    if (location.startsWith("/reports")) return 7;
-    if (location.startsWith("/sync")) return 8;
-    if (location.startsWith("/hardware")) return 9;
-    if (location.startsWith("/notifications")) return 10;
-    if (location.startsWith("/company")) return 11;
+    if (location.startsWith("/users")) return 5;
+    if (location.startsWith("/gst-settings")) return 6;
+    if (location.startsWith("/customers")) return 7;
+    if (location.startsWith("/reports")) return 8;
+    if (location.startsWith("/sync")) return 9;
+    if (location.startsWith("/hardware")) return 10;
+    if (location.startsWith("/notifications")) return 11;
+    if (location.startsWith("/company")) return 12;
     return 0;
   }
 
@@ -147,24 +148,27 @@ class _FoundationShellState extends ConsumerState<FoundationShell> {
         context.go(RouteNames.products);
         break;
       case 5:
-        context.go(RouteNames.gstSettings);
+        context.go(RouteNames.users);
         break;
       case 6:
-        context.go(RouteNames.customers);
+        context.go(RouteNames.gstSettings);
         break;
       case 7:
-        context.go(RouteNames.reports);
+        context.go(RouteNames.customers);
         break;
       case 8:
-        context.go(RouteNames.sync);
+        context.go(RouteNames.reports);
         break;
       case 9:
-        context.go(RouteNames.hardware);
+        context.go(RouteNames.sync);
         break;
       case 10:
-        context.go(RouteNames.notifications);
+        context.go(RouteNames.hardware);
         break;
       case 11:
+        context.go(RouteNames.notifications);
+        break;
+      case 12:
         context.go(RouteNames.companyProfile);
         break;
     }
@@ -232,6 +236,11 @@ class _FoundationShellState extends ConsumerState<FoundationShell> {
         label: "Catalog & Menu",
         icon: Icons.restaurant_menu_outlined,
         selectedIcon: Icons.restaurant_menu_rounded,
+      ),
+      _NavItem(
+        label: "Cashiers",
+        icon: Icons.badge_outlined,
+        selectedIcon: Icons.badge_rounded,
       ),
       _NavItem(
         label: "GST & Tax",
@@ -313,6 +322,16 @@ class _FoundationShellState extends ConsumerState<FoundationShell> {
   }
 
 
+  Future<void> _safeLogout(BuildContext ctx, {bool isBottomSheet = false}) async {
+    if (isBottomSheet && Navigator.canPop(ctx)) {
+      Navigator.of(ctx).pop();
+    }
+    if (context.mounted) {
+      context.go(RouteNames.login);
+    }
+    await ref.read(authNotifierProvider.notifier).logout();
+  }
+
   @override
   Widget build(BuildContext context) {
     final location = GoRouterState.of(context).uri.toString();
@@ -335,14 +354,15 @@ class _FoundationShellState extends ConsumerState<FoundationShell> {
             ? AppColors.neonCyan
             : AppColors.neonEmerald;
 
-    if (isTabletOrDesktop) {
-      final items = isCashier
-          ? _getCashierItems()
-          : (isSAdmin ? _getSAdminItems() : _getAdminItems());
+    final items = isCashier
+        ? _getCashierItems()
+        : (isSAdmin ? _getSAdminItems() : _getAdminItems());
+    final mobileSelectedIndex = selectedIndex > 3 ? 4 : selectedIndex;
 
-      return Scaffold(
-        body: Row(
-          children: [
+    return Scaffold(
+      body: Row(
+        children: [
+          if (isTabletOrDesktop)
             // Collapsible & Expandable Modern Sidebar
             RepaintBoundary(
               child: AnimatedContainer(
@@ -417,59 +437,51 @@ class _FoundationShellState extends ConsumerState<FoundationShell> {
               ),
             ),
 
-            // Content Area
-            Expanded(
-              child: RepaintBoundary(
-                child: widget.child,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Mobile Bottom Navigation (< 700px)
-    final mobileSelectedIndex = selectedIndex > 3 ? 4 : selectedIndex;
-
-    return Scaffold(
-      body: widget.child,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: mobileSelectedIndex,
-        onDestinationSelected: (idx) {
-          if (idx == 4) {
-            _showMobileMenuSheet(context, isCashier, isSAdmin, user, roleNeonColor, isDark);
-          } else {
-            _onItemTapped(idx, context, isCashier, isSAdmin);
-          }
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard_rounded),
-            label: "Dashboard",
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.receipt_long_outlined),
-            selectedIcon: Icon(Icons.receipt_long_rounded),
-            label: "POS",
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.list_alt_outlined),
-            selectedIcon: Icon(Icons.list_alt_rounded),
-            label: "Orders",
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.payments_outlined),
-            selectedIcon: Icon(Icons.payments_rounded),
-            label: "Payments",
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.grid_view_outlined),
-            selectedIcon: Icon(Icons.grid_view_rounded),
-            label: "More",
+          // Content Area - single stable element slot across all viewports
+          Expanded(
+            child: widget.child,
           ),
         ],
       ),
+      bottomNavigationBar: isTabletOrDesktop
+          ? null
+          : NavigationBar(
+              selectedIndex: mobileSelectedIndex,
+              onDestinationSelected: (idx) {
+                if (idx == 4) {
+                  _showMobileMenuSheet(context, isCashier, isSAdmin, user, roleNeonColor, isDark);
+                } else {
+                  _onItemTapped(idx, context, isCashier, isSAdmin);
+                }
+              },
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.dashboard_outlined),
+                  selectedIcon: Icon(Icons.dashboard_rounded),
+                  label: "Dashboard",
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.receipt_long_outlined),
+                  selectedIcon: Icon(Icons.receipt_long_rounded),
+                  label: "POS",
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.list_alt_outlined),
+                  selectedIcon: Icon(Icons.list_alt_rounded),
+                  label: "Orders",
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.payments_outlined),
+                  selectedIcon: Icon(Icons.payments_rounded),
+                  label: "Payments",
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.grid_view_outlined),
+                  selectedIcon: Icon(Icons.grid_view_rounded),
+                  label: "More",
+                ),
+              ],
+            ),
     );
   }
 
@@ -534,7 +546,7 @@ class _FoundationShellState extends ConsumerState<FoundationShell> {
                           ),
                         ),
                         Text(
-                          "Pooja Sweets & Cafe • ${user?.fullName ?? 'Staff'}",
+                          "${user?.shopName ?? 'PulsePOS Store'} • ${user?.fullName ?? 'Staff'}",
                           style: GoogleFonts.dmSans(
                             fontSize: 12,
                             color: AppColors.textSecondary,
@@ -620,11 +632,7 @@ class _FoundationShellState extends ConsumerState<FoundationShell> {
                     minimumSize: const Size(double.infinity, 44),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
-                  onPressed: () {
-                    Navigator.of(ctx).pop();
-                    ref.read(authNotifierProvider.notifier).logout();
-                    context.go(RouteNames.login);
-                  },
+                  onPressed: () => _safeLogout(ctx, isBottomSheet: true),
                 ),
               ],
             ),
@@ -863,12 +871,7 @@ class _FoundationShellState extends ConsumerState<FoundationShell> {
                 IconButton(
                   icon: const Icon(Icons.logout_rounded, size: 18, color: AppColors.error),
                   tooltip: "Sign Out",
-                  onPressed: () async {
-                    await ref.read(authNotifierProvider.notifier).logout();
-                    if (mounted) {
-                      context.go(RouteNames.login);
-                    }
-                  },
+                  onPressed: () => _safeLogout(context),
                 ),
               ],
             )
@@ -895,12 +898,7 @@ class _FoundationShellState extends ConsumerState<FoundationShell> {
                 IconButton(
                   icon: const Icon(Icons.logout_rounded, size: 18, color: AppColors.error),
                   tooltip: "Sign Out",
-                  onPressed: () async {
-                    await ref.read(authNotifierProvider.notifier).logout();
-                    if (mounted) {
-                      context.go(RouteNames.login);
-                    }
-                  },
+                  onPressed: () => _safeLogout(context),
                 ),
               ],
             ),

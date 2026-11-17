@@ -78,6 +78,9 @@ class AppDatabase {
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
+    try {
+      await db.execute("ALTER TABLE ${DatabaseTables.localUser} ADD COLUMN CompanyId INTEGER NOT NULL DEFAULT 1");
+    } catch (_) {}
     await OfflineDataSeeder.seedDatabase(db);
     return db;
   }
@@ -110,6 +113,11 @@ class AppDatabase {
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     // Schema migration handling for future versions
+  }
+
+  Future<void> wipeAllData() async {
+    final db = await database;
+    await OfflineDataSeeder.wipeDatabase(db);
   }
 
   Future<T> runInTransaction<T>(Future<T> Function(Transaction txn) action) async {

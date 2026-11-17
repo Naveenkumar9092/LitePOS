@@ -1,5 +1,6 @@
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "../../authentication/models/user_model.dart";
+import "../../authentication/presentation/auth_state.dart";
 import "../../company/data/company_repository.dart";
 import "../data/user_repository.dart";
 import "../models/login_audit_log_model.dart";
@@ -43,6 +44,8 @@ class UserListState {
     String? successMessage,
     bool clearRoleFilter = false,
     bool clearStatusFilter = false,
+    bool clearErrorMessage = false,
+    bool clearSuccessMessage = false,
   }) {
     return UserListState(
       isLoading: isLoading ?? this.isLoading,
@@ -51,32 +54,52 @@ class UserListState {
       searchQuery: searchQuery ?? this.searchQuery,
       selectedRoleId: clearRoleFilter ? null : (selectedRoleId ?? this.selectedRoleId),
       selectedStatus: clearStatusFilter ? null : (selectedStatus ?? this.selectedStatus),
-      errorMessage: errorMessage,
-      successMessage: successMessage,
+      errorMessage: clearErrorMessage ? null : (errorMessage ?? this.errorMessage),
+      successMessage: clearSuccessMessage ? null : (successMessage ?? this.successMessage),
     );
   }
 }
 
 class UserListNotifier extends StateNotifier<UserListState> {
   final UserRepository _repository;
+  final UserModel? currentUser;
 
-  UserListNotifier(this._repository) : super(const UserListState()) {
+  UserListNotifier(this._repository, {this.currentUser}) : super(const UserListState()) {
     loadUsers();
   }
 
   Future<void> loadUsers() async {
-    state = state.copyWith(isLoading: true, errorMessage: null, successMessage: null);
+    state = state.copyWith(isLoading: true, clearErrorMessage: true, clearSuccessMessage: true);
     try {
+      final isSAdmin = currentUser?.isSAdmin ?? false;
+      final isAdmin = currentUser?.isAdmin ?? false;
+
       final result = await _repository.getUsers(
         search: state.searchQuery.isEmpty ? null : state.searchQuery,
         roleId: state.selectedRoleId,
         isActive: state.selectedStatus,
+        excludeCashiers: isSAdmin,
+        onlyCashiers: isAdmin,
+        companyId: isAdmin ? currentUser?.companyId : null,
       );
+
+      // Enforce data boundaries strictly:
+      // 1. SAdmin views Admins (and SAdmins), NEVER Cashiers!
+      // 2. Admin views Cashiers of their own company, NEVER other Admins or SAdmin!
+      List<UserModel> filteredUsers = result.items;
+      if (isSAdmin) {
+        filteredUsers = filteredUsers.where((u) => !u.isCashier).toList();
+      } else if (isAdmin) {
+        final adminCompanyId = currentUser?.companyId ?? 1;
+        filteredUsers = filteredUsers
+            .where((u) => u.isCashier && (adminCompanyId == 0 || u.companyId == adminCompanyId))
+            .toList();
+      }
 
       state = state.copyWith(
         isLoading: false,
-        users: result.items,
-        totalCount: result.totalCount,
+        users: filteredUsers,
+        totalCount: filteredUsers.length,
       );
     } catch (e) {
       state = state.copyWith(
@@ -108,9 +131,37 @@ class UserListNotifier extends StateNotifier<UserListState> {
   }
 
   Future<bool> createUser(Map<String, dynamic> data) async {
-    state = state.copyWith(isLoading: true, errorMessage: null);
+    state = state.copyWith(isLoading: true, clearErrorMessage: true, clearSuccessMessage: true);
     try {
-      await _repository.createUser(data);
+      final roleId = (data["roleId"] as num?)?.toInt() ?? 3;
+      final isSAdmin = currentUser?.isSAdmin ?? false;
+      final isAdmin = currentUser?.isAdmin ?? false;
+
+      // SAdmin cannot create Cashiers
+      if (isSAdmin && roleId == 3) {
+        state = state.copyWith(
+          isLoading: false,
+          errorMessage: "Super Administrators cannot create Cashiers. Only Shop Admins can create Cashiers.",
+        );
+        return false;
+      }
+
+      // Admin can only create Cashiers for their own company
+      if (isAdmin && roleId != 3) {
+        state = state.copyWith(
+          isLoading: false,
+          errorMessage: "Shop Admins can only create Cashiers.",
+        );
+        return false;
+      }
+
+      final payload = Map<String, dynamic>.from(data);
+      if (isAdmin) {
+        payload["roleId"] = 3;
+        payload["companyId"] = currentUser?.companyId ?? 1;
+      }
+
+      await _repository.createUser(payload);
       state = state.copyWith(
         isLoading: false,
         successMessage: "User created successfully",
@@ -167,7 +218,8 @@ class UserListNotifier extends StateNotifier<UserListState> {
 
 final userListNotifierProvider = StateNotifierProvider<UserListNotifier, UserListState>((ref) {
   final repo = ref.watch(userRepositoryProvider);
-  return UserListNotifier(repo);
+  final currentUser = ref.watch(authNotifierProvider).user;
+  return UserListNotifier(repo, currentUser: currentUser);
 });
 
 final rolesProvider = FutureProvider<List<RoleModel>>((ref) async {

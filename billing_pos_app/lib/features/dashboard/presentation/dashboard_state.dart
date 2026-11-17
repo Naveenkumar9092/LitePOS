@@ -16,21 +16,21 @@ final dashboardDateFilterProvider = StateProvider<DateTime?>((ref) => null);
 // Selected Period Filter (today, week, month)
 final dashboardPeriodFilterProvider = StateProvider<String>((ref) => "today");
 
-// SAdmin Dashboard Provider
-final sadminDashboardProvider = FutureProvider.autoDispose<SAdminDashboardModel>((ref) async {
+// SAdmin Dashboard Provider (Persistent in-memory cache)
+final sadminDashboardProvider = FutureProvider<SAdminDashboardModel>((ref) async {
   final repo = ref.watch(dashboardRepositoryProvider);
   return repo.getSAdminDashboard();
 });
 
-// Admin Dashboard Provider
-final adminDashboardProvider = FutureProvider.autoDispose<AdminDashboardModel>((ref) async {
+// Admin Dashboard Provider (Persistent in-memory cache)
+final adminDashboardProvider = FutureProvider<AdminDashboardModel>((ref) async {
   final repo = ref.watch(dashboardRepositoryProvider);
   final date = ref.watch(dashboardDateFilterProvider);
   return repo.getAdminDashboard(date: date);
 });
 
-// Cashier Dashboard Provider
-final cashierDashboardProvider = FutureProvider.autoDispose<CashierDashboardModel>((ref) async {
+// Cashier Dashboard Provider (Persistent in-memory cache)
+final cashierDashboardProvider = FutureProvider<CashierDashboardModel>((ref) async {
   final repo = ref.watch(dashboardRepositoryProvider);
   final auth = ref.watch(authNotifierProvider);
   final date = ref.watch(dashboardDateFilterProvider);
@@ -38,21 +38,21 @@ final cashierDashboardProvider = FutureProvider.autoDispose<CashierDashboardMode
 });
 
 // Sales Summary Provider
-final salesSummaryProvider = FutureProvider.autoDispose<SalesSummaryModel>((ref) async {
+final salesSummaryProvider = FutureProvider<SalesSummaryModel>((ref) async {
   final repo = ref.watch(dashboardRepositoryProvider);
   final period = ref.watch(dashboardPeriodFilterProvider);
   return repo.getSalesSummary(period: period);
 });
 
 // Payment Summary Provider
-final paymentSummaryProvider = FutureProvider.autoDispose<PaymentSummaryModel>((ref) async {
+final paymentSummaryProvider = FutureProvider<PaymentSummaryModel>((ref) async {
   final repo = ref.watch(dashboardRepositoryProvider);
   final period = ref.watch(dashboardPeriodFilterProvider);
   return repo.getPaymentSummary(period: period);
 });
 
 // Recent Transactions Provider
-final recentTransactionsProvider = FutureProvider.autoDispose<List<RecentTransactionModel>>((ref) async {
+final recentTransactionsProvider = FutureProvider<List<RecentTransactionModel>>((ref) async {
   final repo = ref.watch(dashboardRepositoryProvider);
   final auth = ref.watch(authNotifierProvider);
   final cashierId = auth.user?.isCashier == true ? auth.user?.userId : null;

@@ -1,5 +1,6 @@
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:sqflite/sqflite.dart";
+import "package:uuid/uuid.dart";
 import "package:billing_pos_app/core/constants/api_endpoints.dart";
 import "package:billing_pos_app/core/database/app_database.dart";
 import "package:billing_pos_app/core/database/database_tables.dart";
@@ -92,6 +93,70 @@ class SyncRepository {
     List<Map<String, dynamic>> invoices = const [],
   }) async {
     try {
+      final db = await _db.database;
+      final invoicesPayload = List<Map<String, dynamic>>.from(invoices);
+      final syncedInvoiceIds = <int>[];
+
+      // If no explicit invoices supplied, gather all unsynced invoices from local SQLite
+      if (invoicesPayload.isEmpty) {
+        final unsynced = await db.query(
+          DatabaseTables.localInvoice,
+          where: "SyncStatus = 0 AND InvoiceStatus != 3",
+        );
+
+        for (final row in unsynced) {
+          final invId = (row["InvoiceId"] as num).toInt();
+          syncedInvoiceIds.add(invId);
+
+          final itemRows = await db.query(
+            DatabaseTables.localInvoiceDetail,
+            where: "InvoiceId = ?",
+            whereArgs: [invId],
+          );
+          final payRows = await db.query(
+            DatabaseTables.localPayment,
+            where: "InvoiceId = ?",
+            whereArgs: [invId],
+          );
+
+          invoicesPayload.add({
+            "invoiceGuid": row["InvoiceGuid"]?.toString() ?? const Uuid().v4(),
+            "invoiceNumber": row["InvoiceNumber"],
+            "customerId": row["CustomerId"],
+            "customerGuid": null,
+            "cashierId": row["CashierId"] ?? 1,
+            "invoiceDateUtc": row["InvoiceDateUTC"],
+            "subTotal": row["SubTotal"],
+            "discountAmount": row["DiscountAmount"],
+            "taxableAmount": row["TaxableAmount"],
+            "taxAmount": row["TaxAmount"],
+            "grandTotal": row["GrandTotal"],
+            "paidAmount": row["PaidAmount"],
+            "balanceAmount": row["BalanceAmount"],
+            "paymentStatus": row["PaymentStatus"],
+            "invoiceStatus": row["InvoiceStatus"],
+            "items": itemRows.map((it) => {
+              "productId": it["ProductId"],
+              "productNameSnapshot": it["ProductNameSnapshot"],
+              "unitPrice": it["UnitPrice"],
+              "quantity": (it["Quantity"] as num).toInt(),
+              "discountAmount": it["DiscountAmount"],
+              "taxPercentage": it["TaxPercentage"],
+              "taxAmount": it["TaxAmount"],
+              "lineTotal": it["LineTotal"],
+            }).toList(),
+            "payments": payRows.map((p) => {
+              "paymentGuid": p["PaymentGuid"]?.toString() ?? const Uuid().v4(),
+              "paymentMode": p["PaymentModeId"] ?? 1,
+              "amount": p["Amount"],
+              "transactionReference": p["TransactionReference"],
+              "paymentStatus": p["PaymentStatus"] ?? 2,
+              "createdAtUtc": p["CreatedAtUTC"] ?? DateTime.now().toUtc().toIso8601String(),
+            }).toList(),
+          });
+        }
+      }
+
       final response = await _dioClient.post(
         ApiEndpoints.syncPush,
         data: {
@@ -99,12 +164,30 @@ class SyncRepository {
           "appVersion": appVersion,
           "clientSyncTimestampUtc": DateTime.now().toUtc().toIso8601String(),
           "customers": customers,
-          "invoices": invoices,
+          "invoices": invoicesPayload,
         },
       );
 
       if (response.success && response.data != null) {
         final result = SyncPushResultModel.fromJson(response.data as Map<String, dynamic>);
+
+        // Mark local invoices as synced
+        if (syncedInvoiceIds.isNotEmpty) {
+          for (final id in syncedInvoiceIds) {
+            await db.update(
+              DatabaseTables.localInvoice,
+              {"SyncStatus": 1},
+              where: "InvoiceId = ?",
+              whereArgs: [id],
+            );
+          }
+          await db.update(
+            DatabaseTables.localSyncOutbox,
+            {"SyncStatus": 3},
+            where: "EntityType = 'INVOICE' AND SyncStatus = 1",
+          );
+        }
+
         return ApiResponse<SyncPushResultModel>(
           success: true,
           message: response.message,
@@ -198,7 +281,7 @@ class SyncRepository {
     try {
       final db = await _db.database;
       final count = Sqflite.firstIntValue(await db.rawQuery(
-        "SELECT COUNT(*) FROM ${DatabaseTables.localSyncOutbox} WHERE SyncStatus = 1",
+        "SELECT COUNT(*) FROM ${DatabaseTables.localInvoice} WHERE SyncStatus = 0 AND InvoiceStatus != 3",
       ));
       return count ?? 0;
     } catch (_) {

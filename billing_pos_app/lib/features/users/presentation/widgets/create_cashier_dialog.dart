@@ -4,6 +4,8 @@ import "../../../../core/theme/app_colors.dart";
 import "../../../../shared/widgets/app_button.dart";
 import "../../../../shared/widgets/app_text_field.dart";
 import "../../../../shared/widgets/app_toast.dart";
+import "../../../authentication/models/user_model.dart";
+import "../../../authentication/presentation/auth_state.dart";
 import "../user_state.dart";
 
 class CreateCashierDialog extends ConsumerStatefulWidget {
@@ -41,6 +43,7 @@ class _CreateCashierDialogState extends ConsumerState<CreateCashierDialog> {
     setState(() => _isSubmitting = true);
 
     try {
+      final currentUser = ref.read(authNotifierProvider).user;
       final success = await ref.read(userListNotifierProvider.notifier).createUser({
         "fullName": _fullNameController.text.trim(),
         "username": _usernameController.text.trim().toLowerCase(),
@@ -48,6 +51,7 @@ class _CreateCashierDialogState extends ConsumerState<CreateCashierDialog> {
         "email": _emailController.text.trim().isEmpty ? null : _emailController.text.trim().toLowerCase(),
         "mobileNumber": _mobileController.text.trim().isEmpty ? null : _mobileController.text.trim(),
         "roleId": 3, // Role 3: Cashier (Billing Operator)
+        "companyId": currentUser?.companyId ?? 1,
       });
 
       if (mounted) {
@@ -75,6 +79,14 @@ class _CreateCashierDialogState extends ConsumerState<CreateCashierDialog> {
 
   @override
   Widget build(BuildContext context) {
+    UserModel? currentUser;
+    try {
+      currentUser = ref.watch(authNotifierProvider).user;
+    } catch (_) {}
+    final storeLabel = currentUser?.companyName != null && currentUser!.companyName!.isNotEmpty
+        ? currentUser.companyName!
+        : "Company #${currentUser?.companyId ?? 1}";
+
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
@@ -115,9 +127,9 @@ class _CreateCashierDialogState extends ConsumerState<CreateCashierDialog> {
                                   ),
                             ),
                             const SizedBox(height: 2),
-                            const Text(
-                              "Assign counter billing operator credentials",
-                              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                            Text(
+                              "Store: $storeLabel",
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary),
                             ),
                           ],
                         ),
@@ -138,14 +150,24 @@ class _CreateCashierDialogState extends ConsumerState<CreateCashierDialog> {
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
                     ),
-                    child: const Row(
+                    child: Row(
                       children: [
-                        Icon(Icons.badge_outlined, size: 18, color: AppColors.success),
-                        SizedBox(width: 10),
+                        const Icon(Icons.badge_outlined, size: 18, color: AppColors.success),
+                        const SizedBox(width: 10),
                         Expanded(
-                          child: Text(
-                            "Role: Cashier (Billing Operator) — Access to POS billing counter, receipts & cash register",
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.success),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                "Role: Cashier (Billing Operator) — Access to POS billing counter & receipts",
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.success),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                "Assigned Company: $storeLabel",
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primaryDark),
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -235,7 +257,7 @@ class _CreateCashierDialogState extends ConsumerState<CreateCashierDialog> {
                   // Email
                   AppTextField(
                     label: "Email Address (Optional)",
-                    hint: "cashier@poojasweets.com",
+                    hint: "cashier@store.com",
                     controller: _emailController,
                     prefixIcon: const Icon(Icons.email_outlined),
                     keyboardType: TextInputType.emailAddress,

@@ -25,6 +25,7 @@ class AuthRepository {
     String? deviceName,
     bool forceOffline = false,
   }) async {
+    // 1. If not forced offline, attempt online cloud authentication
     if (!forceOffline) {
       try {
         final response = await _dioClient.post<AuthResponseModel>(
@@ -36,27 +37,28 @@ class AuthRepository {
             "deviceName": deviceName,
           },
           fromJson: (json) => AuthResponseModel.fromJson(json as Map<String, dynamic>),
-        ).timeout(const Duration(milliseconds: 2000));
+        ).timeout(const Duration(seconds: 3));
 
         if (response.success && response.data != null) {
           final authData = response.data!;
-          // Save tokens in secure storage
+          // Save tokens in secure storage & shared preferences
           await _storageService.write(AppConstants.tokenKey, authData.accessToken);
           await _storageService.write(AppConstants.refreshTokenKey, authData.refreshToken);
           await _storageService.write("current_user_json", jsonEncode(authData.user.toJson()));
           await _storageService.write("user_role", authData.user.roleName);
 
-          // Cache user to local SQLite
+          // First save in local SQLite for offline resilience!
           await _cacheUserToSqlite(authData.user);
 
           return authData;
         }
       } catch (_) {
-        // Cloud unreachable or timed out -> Fallback immediately to offline login!
+        // If internet is unavailable, timed out, or cloud connection fails,
+        // seamlessly fall through to local SQLite database login!
       }
     }
 
-    // Offline Login Fallback
+    // 2. Offline Local SQLite Login (Instant & Resilient)
     return await _loginOffline(username: username, password: password);
   }
 
@@ -75,19 +77,50 @@ class AuthRepository {
     UserModel? matchedUser;
     List<String> permissions = [];
 
-    // Predefined offline roles
-    if (cleanUsername == "sadmin" || cleanUsername == "superadmin") {
+    // 1. Check SQLite local user table first
+    try {
+      final db = await _db.database;
+      final rows = await db.rawQuery("""
+        SELECT u.*, c.CompanyName 
+        FROM ${DatabaseTables.localUser} u
+        LEFT JOIN ${DatabaseTables.localCompany} c ON u.CompanyId = c.CompanyId
+        WHERE LOWER(u.Username) = ?
+        LIMIT 1
+      """, [cleanUsername]);
+
+      if (rows.isNotEmpty) {
+        matchedUser = UserModel.fromSqlite(rows.first);
+        permissions = matchedUser.isSAdmin
+            ? const [
+                "dashboard.view", "sadmin.access", "company.manage", "users.manage",
+                "roles.manage", "billing.create", "orders.view", "orders.manage",
+                "products.manage", "reports.view", "sync.manage", "hardware.manage",
+              ]
+            : (matchedUser.isAdmin
+                ? const [
+                    "dashboard.view", "company.manage", "users.manage", "billing.create",
+                    "orders.view", "orders.manage", "products.manage", "reports.view",
+                    "hardware.manage", "sync.manage",
+                  ]
+                : const [
+                    "dashboard.view", "billing.create", "orders.view", "pos.operate",
+                  ]);
+      }
+    } catch (_) {}
+
+    // 2. Root system fallback if localUser row was not found
+    if (matchedUser == null && (cleanUsername == "sadmin" || cleanUsername == "superadmin")) {
       matchedUser = UserModel(
         id: 1,
-        companyId: 1,
-        shopId: 1,
+        companyId: 0,
+        shopId: null,
         fullName: "Super Administrator",
         username: "sadmin",
         email: "sadmin@litepos.com",
         mobileNumber: "9876543210",
         roleId: 1,
         roleName: "SAdmin",
-        shopName: "Pooja Main Store",
+        shopName: null,
         isActive: true,
         createdAtUtc: DateTime.now(),
       );
@@ -96,66 +129,10 @@ class AuthRepository {
         "roles.manage", "billing.create", "orders.view", "orders.manage",
         "products.manage", "reports.view", "sync.manage", "hardware.manage",
       ];
-    } else if (cleanUsername == "admin" || cleanUsername == "shopadmin") {
-      matchedUser = UserModel(
-        id: 2,
-        companyId: 1,
-        shopId: 1,
-        fullName: "Shop Administrator",
-        username: "admin",
-        email: "admin@litepos.com",
-        mobileNumber: "9876543211",
-        roleId: 2,
-        roleName: "Admin",
-        shopName: "Pooja Main Store",
-        isActive: true,
-        createdAtUtc: DateTime.now(),
-      );
-      permissions = const [
-        "dashboard.view", "company.manage", "users.manage", "billing.create",
-        "orders.view", "orders.manage", "products.manage", "reports.view",
-        "hardware.manage", "sync.manage",
-      ];
-    } else if (cleanUsername == "cashier" || cleanUsername == "operator") {
-      matchedUser = UserModel(
-        id: 3,
-        companyId: 1,
-        shopId: 1,
-        fullName: "Billing Cashier",
-        username: "cashier",
-        email: "cashier@litepos.com",
-        mobileNumber: "9876543212",
-        roleId: 3,
-        roleName: "Cashier",
-        shopName: "Pooja Main Store",
-        isActive: true,
-        createdAtUtc: DateTime.now(),
-      );
-      permissions = const [
-        "dashboard.view", "billing.create", "orders.view", "pos.operate",
-      ];
-    } else {
-      // Check SQLite local user table
-      try {
-        final db = await _db.database;
-        final rows = await db.query(
-          DatabaseTables.localUser,
-          where: "LOWER(Username) = ?",
-          whereArgs: [cleanUsername],
-        );
-        if (rows.isNotEmpty) {
-          matchedUser = UserModel.fromSqlite(rows.first);
-          permissions = matchedUser.isSAdmin
-              ? const ["dashboard.view", "sadmin.access", "company.manage", "users.manage", "billing.create", "orders.view"]
-              : (matchedUser.isAdmin
-                  ? const ["dashboard.view", "company.manage", "billing.create", "orders.view", "products.manage"]
-                  : const ["dashboard.view", "billing.create", "orders.view", "pos.operate"]);
-        }
-      } catch (_) {}
     }
 
     if (matchedUser == null) {
-      throw Exception("User '$username' not found. In offline mode, use 'sadmin', 'admin', or 'cashier'.");
+      throw Exception("User '$username' not found in local system. Please verify username.");
     }
 
     final offlineToken = "offline-token-${matchedUser.id}-${DateTime.now().millisecondsSinceEpoch}";
@@ -200,11 +177,14 @@ class AuthRepository {
 
   Future<void> logout() async {
     try {
+      final token = await _storageService.read(AppConstants.tokenKey);
       final refreshToken = await _storageService.read(AppConstants.refreshTokenKey);
-      await _dioClient.post(
-        ApiEndpoints.logout,
-        data: {"refreshToken": refreshToken},
-      );
+      if (token != null && !token.startsWith("offline-token") && refreshToken != null) {
+        await _dioClient.post(
+          ApiEndpoints.logout,
+          data: {"refreshToken": refreshToken},
+        ).timeout(const Duration(seconds: 2));
+      }
     } catch (_) {
       // Offline or network error during logout should still clear local tokens
     } finally {

@@ -15,16 +15,31 @@ class MockAuthNotifier extends StateNotifier<AuthState> implements AuthNotifier 
   dynamic noSuchMethod(Invocation invocation) => null;
 }
 
-class FakeUserListNotifier extends UserListNotifier {
-  FakeUserListNotifier(super.repository);
+class FakeUserListNotifier extends StateNotifier<UserListState> implements UserListNotifier {
+  FakeUserListNotifier([UserListState? initialState]) : super(initialState ?? const UserListState());
 
   Map<String, dynamic>? lastCreatedUserData;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
 
   @override
   Future<bool> createUser(Map<String, dynamic> data) async {
     lastCreatedUserData = data;
     return true;
   }
+
+  @override
+  Future<void> loadUsers() async {}
+
+  @override
+  void setSearchQuery(String query) {}
+
+  @override
+  void setRoleFilter(int? roleId) {}
+
+  @override
+  void setStatusFilter(bool? isActive) {}
 }
 
 void main() {
@@ -50,7 +65,7 @@ void main() {
     });
 
     testWidgets("validates empty required fields on submit", (tester) async {
-      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.physicalSize = const Size(1200, 1400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
         tester.view.resetPhysicalSize();
@@ -67,6 +82,7 @@ void main() {
         ),
       );
 
+      await tester.ensureVisible(find.text("Create Admin"));
       await tester.tap(find.text("Create Admin"));
       await tester.pumpAndSettle();
 
@@ -126,8 +142,15 @@ void main() {
     });
   });
 
-  group("UserManagementScreen SAdmin Access Control Tests", () {
-    testWidgets("restricts access and shows warning when user is Admin (not SAdmin)", (tester) async {
+  group("UserManagementScreen Role Hierarchy & Access Control Tests", () {
+    testWidgets("allows Store Admin to view Cashier Management and create Cashiers", (tester) async {
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
       final adminUser = UserModel(
         id: 2,
         companyId: 1,
@@ -143,6 +166,11 @@ void main() {
         ProviderScope(
           overrides: [
             authNotifierProvider.overrideWith((ref) => MockAuthNotifier(AuthState(user: adminUser, isAuthenticated: true))),
+            userListNotifierProvider.overrideWith((ref) => FakeUserListNotifier(
+              UserListState(users: [
+                UserModel(id: 3, companyId: 1, fullName: "Cashier 1", username: "cashier1", roleId: 3, roleName: "Cashier", isActive: true, createdAtUtc: DateTime.now()),
+              ]),
+            )),
           ],
           child: const MaterialApp(
             home: UserManagementScreen(),
@@ -150,9 +178,80 @@ void main() {
         ),
       );
 
-      expect(find.text("Super Admin Access Required"), findsOneWidget);
-      expect(find.textContaining("User & Role Management is restricted exclusively to Super Administrators (SAdmin)"), findsOneWidget);
-      expect(find.text("Return to Dashboard"), findsOneWidget);
+      expect(find.text("Cashier Management"), findsOneWidget);
+      expect(find.text("Create Cashier"), findsOneWidget);
+      expect(find.text("Cashiers"), findsOneWidget);
+      expect(find.text("Role: Cashier"), findsOneWidget);
+      expect(find.text("Super Admin Access Required"), findsNothing);
+    });
+
+    testWidgets("restricts access and shows warning when user is Cashier", (tester) async {
+      final cashierUser = UserModel(
+        id: 3,
+        companyId: 1,
+        fullName: "Counter Cashier",
+        username: "cashier01",
+        roleId: 3,
+        roleName: "Cashier",
+        isActive: true,
+        createdAtUtc: DateTime.now(),
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authNotifierProvider.overrideWith((ref) => MockAuthNotifier(AuthState(user: cashierUser, isAuthenticated: true))),
+          ],
+          child: const MaterialApp(
+            home: UserManagementScreen(),
+          ),
+        ),
+      );
+
+      expect(find.text("Administrator Access Required"), findsOneWidget);
+      expect(find.textContaining("Staff management is restricted exclusively to Store and System Administrators."), findsOneWidget);
+      expect(find.text("Return to Billing"), findsOneWidget);
+    });
+
+    testWidgets("allows SAdmin to view Admin management and Create Admin Profile", (tester) async {
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final sadminUser = UserModel(
+        id: 1,
+        companyId: 0,
+        fullName: "Super Administrator",
+        username: "sadmin",
+        roleId: 1,
+        roleName: "SAdmin",
+        isActive: true,
+        createdAtUtc: DateTime.now(),
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authNotifierProvider.overrideWith((ref) => MockAuthNotifier(AuthState(user: sadminUser, isAuthenticated: true))),
+            userListNotifierProvider.overrideWith((ref) => FakeUserListNotifier(
+              UserListState(users: [
+                UserModel(id: 1, companyId: 0, fullName: "Super Administrator", username: "sadmin", roleId: 1, roleName: "SAdmin", isActive: true, createdAtUtc: DateTime.now()),
+                UserModel(id: 2, companyId: 1, fullName: "Shop Administrator", username: "admin", roleId: 2, roleName: "Admin", isActive: true, createdAtUtc: DateTime.now()),
+              ]),
+            )),
+          ],
+          child: const MaterialApp(
+            home: UserManagementScreen(),
+          ),
+        ),
+      );
+
+      expect(find.text("Admin & User Management"), findsOneWidget);
+      expect(find.text("Create Admin Profile"), findsOneWidget);
+      expect(find.text("Roles & Permissions"), findsOneWidget);
     });
   });
 }

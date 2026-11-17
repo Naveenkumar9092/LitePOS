@@ -11,6 +11,7 @@ import "../../authentication/models/user_model.dart";
 import "../../authentication/presentation/auth_state.dart";
 import "user_state.dart";
 import "widgets/create_admin_dialog.dart";
+import "widgets/create_cashier_dialog.dart";
 
 class UserManagementScreen extends ConsumerStatefulWidget {
   const UserManagementScreen({super.key});
@@ -19,19 +20,11 @@ class UserManagementScreen extends ConsumerStatefulWidget {
   ConsumerState<UserManagementScreen> createState() => _UserManagementScreenState();
 }
 
-class _UserManagementScreenState extends ConsumerState<UserManagementScreen> with SingleTickerProviderStateMixin {
-  late final TabController _tabController;
+class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
   final _searchController = TextEditingController();
 
   @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-  }
-
-  @override
   void dispose() {
-    _tabController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -40,6 +33,22 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
     final currentUser = ref.read(authNotifierProvider).user;
     final isSAdmin = currentUser?.isSAdmin ?? false;
     final isAdmin = currentUser?.isAdmin ?? false;
+
+    if (existingUser == null) {
+      if (isSAdmin) {
+        showDialog(
+          context: context,
+          builder: (ctx) => const CreateAdminDialog(),
+        );
+        return;
+      } else if (isAdmin) {
+        showDialog(
+          context: context,
+          builder: (ctx) => const CreateCashierDialog(),
+        );
+        return;
+      }
+    }
 
     final isEditing = existingUser != null;
     final fullNameCtrl = TextEditingController(text: existingUser?.fullName ?? "");
@@ -53,7 +62,9 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Text(isEditing ? "Edit User Account" : (isSAdmin ? "Register Admin Profile" : "Register New Cashier")),
+          title: Text(isEditing
+              ? (isSAdmin ? "Edit Admin Profile" : "Edit Cashier Profile")
+              : (isSAdmin ? "Register Admin Profile" : "Register New Cashier")),
           content: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 480),
             child: SingleChildScrollView(
@@ -73,7 +84,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                     controller: usernameCtrl,
                     prefixIcon: const Icon(Icons.person_outline),
                     enabled: !isEditing, // Username immutable on edit
-                    hintText: "e.g. cashier_morning",
+                    hintText: isSAdmin ? "e.g. admin_store01" : "e.g. cashier_morning",
                   ),
                   const SizedBox(height: 12),
                   if (!isEditing) ...[
@@ -109,11 +120,9 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                     items: [
                       if (isSAdmin) ...[
                         const DropdownMenuItem(value: 2, child: Text("Admin (Shop Administrator)")),
+                        if (existingUser?.isSAdmin == true)
+                          const DropdownMenuItem(value: 1, child: Text("SAdmin (Super Administrator)")),
                       ] else if (isAdmin) ...[
-                        const DropdownMenuItem(value: 3, child: Text("Cashier (Billing Operator)")),
-                      ] else ...[
-                        const DropdownMenuItem(value: 1, child: Text("SAdmin (Super Administrator)")),
-                        const DropdownMenuItem(value: 2, child: Text("Admin (Shop Administrator)")),
                         const DropdownMenuItem(value: 3, child: Text("Cashier (Billing Operator)")),
                       ],
                     ],
@@ -158,6 +167,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                     "email": emailCtrl.text.trim().isEmpty ? null : emailCtrl.text.trim(),
                     "mobileNumber": mobileCtrl.text.trim().isEmpty ? null : mobileCtrl.text.trim(),
                     "roleId": selectedRoleId,
+                    if (isAdmin) "companyId": currentUser?.companyId ?? 1,
                   });
                 } else {
                   success = await ref.read(userListNotifierProvider.notifier).createUser({
@@ -167,6 +177,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                     "email": emailCtrl.text.trim().isEmpty ? null : emailCtrl.text.trim(),
                     "mobileNumber": mobileCtrl.text.trim().isEmpty ? null : mobileCtrl.text.trim(),
                     "roleId": selectedRoleId,
+                    if (isAdmin) "companyId": currentUser?.companyId ?? 1,
                   });
                 }
 
@@ -174,13 +185,15 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                   nav.pop();
                   messenger.showSnackBar(
                     SnackBar(
-                      content: Text(isEditing ? "User updated successfully!" : "User registered successfully!"),
+                      content: Text(isEditing
+                          ? "User updated successfully!"
+                          : (isSAdmin ? "Admin profile registered successfully!" : "Cashier registered successfully!")),
                       backgroundColor: AppColors.success,
                     ),
                   );
                 }
               },
-              child: Text(isEditing ? "Save Changes" : "Create User"),
+              child: Text(isEditing ? "Save Changes" : (isSAdmin ? "Create Admin" : "Create Cashier")),
             ),
           ],
         ),
@@ -295,12 +308,12 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
   Widget build(BuildContext context) {
     final currentUser = ref.watch(authNotifierProvider).user;
 
-    // Strict access control: User & Role Management is restricted exclusively to SAdmin
-    if (currentUser != null && !currentUser.isSAdmin) {
+    // Strict access control: Only SAdmin and Store Admin can access staff management
+    if (currentUser == null || (!currentUser.isSAdmin && !currentUser.isAdmin)) {
       return Scaffold(
         backgroundColor: AppColors.background,
         appBar: AppBar(
-          title: const Text("User & Role Management"),
+          title: const Text("Access Restricted"),
           backgroundColor: Colors.white,
           foregroundColor: AppColors.textPrimary,
           elevation: 0,
@@ -327,26 +340,26 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                     ),
                     const SizedBox(height: 20),
                     const Text(
-                      "Super Admin Access Required",
+                      "Administrator Access Required",
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 10),
                     const Text(
-                      "User & Role Management is restricted exclusively to Super Administrators (SAdmin). Store Admins can configure shop operations, manage catalog items, and register cashiers from the Admin Dashboard.",
+                      "Staff management is restricted exclusively to Store and System Administrators.",
                       style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 24),
                     ElevatedButton.icon(
                       icon: const Icon(Icons.arrow_back_rounded, size: 16),
-                      label: const Text("Return to Dashboard"),
+                      label: const Text("Return to Billing"),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
-                      onPressed: () => context.go(RouteNames.adminDashboard),
+                      onPressed: () => context.go(RouteNames.posBilling),
                     ),
                   ],
                 ),
@@ -357,83 +370,145 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
       );
     }
 
+    final isSAdmin = currentUser.isSAdmin;
     final userListState = ref.watch(userListNotifierProvider);
     final isMobile = MediaQuery.sizeOf(context).width < 700;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: Text(isMobile ? "Users & Roles" : "User & Role Management"),
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.textPrimary,
-        elevation: 0,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: isMobile
-                ? IconButton.filled(
-                    style: IconButton.styleFrom(backgroundColor: AppColors.primary),
-                    icon: const Icon(Icons.admin_panel_settings_rounded, size: 18, color: Colors.white),
-                    tooltip: "Create Admin Profile",
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        builder: (ctx) => const CreateAdminDialog(),
-                      );
-                    },
-                  )
-                : ElevatedButton.icon(
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        builder: (ctx) => const CreateAdminDialog(),
-                      );
-                    },
-                    icon: const Icon(Icons.admin_panel_settings_rounded, size: 16),
-                    label: const Text(
-                      "Create Admin Profile",
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
+    final screenTitle = isSAdmin
+        ? (isMobile ? "Users & Roles" : "Admin & User Management")
+        : (isMobile ? "Cashiers" : "Cashier Management");
+
+    return DefaultTabController(
+      length: isSAdmin ? 3 : 2,
+      key: ValueKey("user_mgmt_${isSAdmin ? 'sadmin' : 'admin'}"),
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          title: Text(screenTitle),
+          backgroundColor: Colors.white,
+          foregroundColor: AppColors.textPrimary,
+          elevation: 0,
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: isSAdmin
+                  ? (isMobile
+                      ? IconButton.filled(
+                          style: IconButton.styleFrom(backgroundColor: AppColors.primary),
+                          icon: const Icon(Icons.admin_panel_settings_rounded, size: 18, color: Colors.white),
+                          tooltip: "Create Admin Profile",
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (ctx) => const CreateAdminDialog(),
+                            );
+                          },
+                        )
+                      : ElevatedButton.icon(
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (ctx) => const CreateAdminDialog(),
+                            );
+                          },
+                          icon: const Icon(Icons.admin_panel_settings_rounded, size: 16),
+                          label: const Text(
+                            "Create Admin Profile",
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ))
+                  : (isMobile
+                      ? IconButton.filled(
+                          style: IconButton.styleFrom(backgroundColor: AppColors.neonEmerald),
+                          icon: const Icon(Icons.person_add_alt_1_rounded, size: 18, color: Colors.white),
+                          tooltip: "Create Cashier",
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (ctx) => const CreateCashierDialog(),
+                            );
+                          },
+                        )
+                      : ElevatedButton.icon(
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (ctx) => const CreateCashierDialog(),
+                            );
+                          },
+                          icon: const Icon(Icons.person_add_alt_1_rounded, size: 16),
+                          label: const Text(
+                            "Create Cashier",
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.neonEmerald,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        )),
+            ),
+          ],
+          bottom: TabBar(
+            isScrollable: isMobile,
+            tabAlignment: isMobile ? TabAlignment.start : TabAlignment.fill,
+            labelColor: isSAdmin ? AppColors.primary : AppColors.neonEmerald,
+            unselectedLabelColor: AppColors.textSecondary,
+            indicatorColor: isSAdmin ? AppColors.primary : AppColors.neonEmerald,
+            tabs: isSAdmin
+                ? const [
+                    Tab(icon: Icon(Icons.people_alt_outlined), text: "Admins & Users"),
+                    Tab(icon: Icon(Icons.admin_panel_settings_outlined), text: "Roles & Permissions"),
+                    Tab(icon: Icon(Icons.history_outlined), text: "Login History"),
+                  ]
+                : const [
+                    Tab(icon: Icon(Icons.point_of_sale_rounded), text: "Cashiers"),
+                    Tab(icon: Icon(Icons.history_outlined), text: "Cashier History"),
+                  ],
           ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: isMobile,
-          tabAlignment: isMobile ? TabAlignment.start : TabAlignment.fill,
-          labelColor: AppColors.primary,
-          unselectedLabelColor: AppColors.textSecondary,
-          indicatorColor: AppColors.primary,
-          tabs: const [
-            Tab(icon: Icon(Icons.people_alt_outlined), text: "Users"),
-            Tab(icon: Icon(Icons.admin_panel_settings_outlined), text: "Roles & Permissions"),
-            Tab(icon: Icon(Icons.history_outlined), text: "Login History"),
+        ),
+        body: TabBarView(
+          children: [
+            // TAB 1: USERS / CASHIERS LIST
+            _buildUsersTab(userListState, currentUser, isMobile),
+
+            if (isSAdmin)
+              // TAB 2: ROLES & PERMISSIONS (SAdmin only)
+              _buildRolesTab(),
+
+            // TAB 3 (or TAB 2 for Admin): LOGIN HISTORY
+            _buildAuditLogsTab(),
           ],
         ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          // TAB 1: USERS LIST
-          _buildUsersTab(userListState, currentUser, isMobile),
-
-          // TAB 2: ROLES & PERMISSIONS
-          _buildRolesTab(),
-
-          // TAB 3: LOGIN HISTORY / AUDIT LOGS
-          _buildAuditLogsTab(),
-        ],
       ),
     );
   }
 
   Widget _buildUsersTab(UserListState state, UserModel? currentUser, bool isMobile) {
+    final isSAdmin = currentUser?.isSAdmin ?? false;
+    final isAdmin = currentUser?.isAdmin ?? false;
+
+    // Filter users strictly according to hierarchy & company boundaries:
+    // 1. SAdmin creates and views Admins (and SAdmins). NEVER Cashiers!
+    // 2. Admin creates and views Cashiers of their own company. NEVER SAdmins or other company Admins!
+    final displayedUsers = state.users.where((user) {
+      if (isSAdmin) {
+        return !user.isCashier;
+      }
+      if (isAdmin) {
+        final adminCompanyId = currentUser?.companyId ?? 1;
+        return user.isCashier && (adminCompanyId == 0 || user.companyId == adminCompanyId);
+      }
+      return false;
+    }).toList();
+
     return Column(
       children: [
         // Filter bar
@@ -449,7 +524,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                           child: TextField(
                             controller: _searchController,
                             decoration: InputDecoration(
-                              hintText: "Search name, username...",
+                              hintText: isSAdmin ? "Search admin by name..." : "Search cashier by name...",
                               prefixIcon: const Icon(Icons.search, size: 18),
                               suffixIcon: _searchController.text.isNotEmpty
                                   ? IconButton(
@@ -481,25 +556,44 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Expanded(
-                          child: DropdownButtonFormField<int?>(
-                            value: state.selectedRoleId,
-                            decoration: const InputDecoration(
-                              isDense: true,
-                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                              border: OutlineInputBorder(),
+                        if (isSAdmin)
+                          Expanded(
+                            child: DropdownButtonFormField<int?>(
+                              value: state.selectedRoleId,
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                border: OutlineInputBorder(),
+                              ),
+                              items: const [
+                                DropdownMenuItem(value: null, child: Text("All Roles", style: TextStyle(fontSize: 12))),
+                                DropdownMenuItem(value: 2, child: Text("Admin", style: TextStyle(fontSize: 12))),
+                                DropdownMenuItem(value: 1, child: Text("SAdmin", style: TextStyle(fontSize: 12))),
+                              ],
+                              onChanged: (val) {
+                                ref.read(userListNotifierProvider.notifier).setRoleFilter(val);
+                              },
                             ),
-                            items: const [
-                              DropdownMenuItem(value: null, child: Text("All Roles", style: TextStyle(fontSize: 12))),
-                              DropdownMenuItem(value: 1, child: Text("SAdmin", style: TextStyle(fontSize: 12))),
-                              DropdownMenuItem(value: 2, child: Text("Admin", style: TextStyle(fontSize: 12))),
-                              DropdownMenuItem(value: 3, child: Text("Cashier", style: TextStyle(fontSize: 12))),
-                            ],
-                            onChanged: (val) {
-                              ref.read(userListNotifierProvider.notifier).setRoleFilter(val);
-                            },
+                          )
+                        else
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: AppColors.successContainer.withValues(alpha: 0.4),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: AppColors.success.withValues(alpha: 0.2)),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.point_of_sale_rounded, size: 14, color: AppColors.success),
+                                  SizedBox(width: 6),
+                                  Text("Role: Cashier", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.success)),
+                                ],
+                              ),
+                            ),
                           ),
-                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: DropdownButtonFormField<bool?>(
@@ -529,7 +623,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                       child: TextField(
                         controller: _searchController,
                         decoration: InputDecoration(
-                          hintText: "Search user by name, username, mobile...",
+                          hintText: isSAdmin ? "Search admin by name, username, mobile..." : "Search cashier by name, username, mobile...",
                           prefixIcon: const Icon(Icons.search, size: 20),
                           suffixIcon: _searchController.text.isNotEmpty
                               ? IconButton(
@@ -549,21 +643,38 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                       ),
                     ),
                     const SizedBox(width: 12),
-                    // Role Filter Dropdown
-                    DropdownButton<int?>(
-                      value: state.selectedRoleId,
-                      hint: const Text("All Roles"),
-                      underline: const SizedBox(),
-                      items: const [
-                        DropdownMenuItem(value: null, child: Text("All Roles")),
-                        DropdownMenuItem(value: 1, child: Text("SAdmin")),
-                        DropdownMenuItem(value: 2, child: Text("Admin")),
-                        DropdownMenuItem(value: 3, child: Text("Cashier")),
-                      ],
-                      onChanged: (val) {
-                        ref.read(userListNotifierProvider.notifier).setRoleFilter(val);
-                      },
-                    ),
+                    // Role Filter Dropdown for SAdmin, or static badge for Admin
+                    if (isSAdmin)
+                      DropdownButton<int?>(
+                        value: state.selectedRoleId,
+                        hint: const Text("All Roles"),
+                        underline: const SizedBox(),
+                        items: const [
+                          DropdownMenuItem(value: null, child: Text("All Roles")),
+                          DropdownMenuItem(value: 2, child: Text("Admin")),
+                          DropdownMenuItem(value: 1, child: Text("SAdmin")),
+                        ],
+                        onChanged: (val) {
+                          ref.read(userListNotifierProvider.notifier).setRoleFilter(val);
+                        },
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.successContainer.withValues(alpha: 0.4),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.success.withValues(alpha: 0.2)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.point_of_sale_rounded, size: 16, color: AppColors.success),
+                            SizedBox(width: 6),
+                            Text("Role: Cashier", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.success)),
+                          ],
+                        ),
+                      ),
                     const SizedBox(width: 8),
                     // Status Filter
                     DropdownButton<bool?>(
@@ -591,25 +702,34 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
 
         // User list
         Expanded(
-          child: state.isLoading && state.users.isEmpty
+          child: state.isLoading && displayedUsers.isEmpty
               ? const Center(child: CircularProgressIndicator())
-              : state.users.isEmpty
+              : displayedUsers.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.person_off_outlined, size: 48, color: Colors.grey[400]),
+                          Icon(
+                            isSAdmin ? Icons.admin_panel_settings_outlined : Icons.point_of_sale_outlined,
+                            size: 48,
+                            color: Colors.grey[400],
+                          ),
                           const SizedBox(height: 12),
-                          const Text("No users found.", style: TextStyle(color: AppColors.textSecondary)),
+                          Text(
+                            isSAdmin
+                                ? "No admin profiles found."
+                                : "No cashiers found for this store. Click '+ Create Cashier' to add one.",
+                            style: const TextStyle(color: AppColors.textSecondary),
+                          ),
                         ],
                       ),
                     )
                   : ListView.separated(
                       padding: EdgeInsets.all(isMobile ? 10 : 16),
-                      itemCount: state.users.length,
+                      itemCount: displayedUsers.length,
                       separatorBuilder: (_, __) => SizedBox(height: isMobile ? 8 : 12),
                       itemBuilder: (context, index) {
-                        final user = state.users[index];
+                        final user = displayedUsers[index];
                         final isSelf = currentUser?.id == user.id;
 
                         if (isMobile) {
@@ -685,6 +805,28 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                                 Row(
                                   children: [
                                     _buildRoleChip(user.roleName),
+                                    if (user.isAdmin || (user.companyName != null && user.companyName!.isNotEmpty)) ...[
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: Colors.amber.shade50,
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(color: Colors.amber.shade300),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.store_mall_directory_rounded, size: 14, color: Colors.amber.shade900),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              user.companyName ?? "Company #${user.companyId}",
+                                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                     const Spacer(),
                                     IconButton(
                                       icon: const Icon(Icons.edit_outlined, size: 18),
@@ -761,6 +903,28 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> wit
                                         ],
                                         const SizedBox(width: 8),
                                         _buildRoleChip(user.roleName),
+                                    if (user.isAdmin || (user.companyName != null && user.companyName!.isNotEmpty)) ...[
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: Colors.amber.shade50,
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(color: Colors.amber.shade300),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.store_mall_directory_rounded, size: 14, color: Colors.amber.shade900),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              user.companyName ?? "Company #${user.companyId}",
+                                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                       ],
                                     ),
                                     const SizedBox(height: 4),

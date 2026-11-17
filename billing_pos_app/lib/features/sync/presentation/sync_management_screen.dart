@@ -2,6 +2,7 @@ import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:intl/intl.dart";
 import "package:billing_pos_app/core/theme/app_colors.dart";
+import "package:billing_pos_app/features/company/data/company_repository.dart";
 import "package:billing_pos_app/shared/widgets/app_button.dart";
 import "package:billing_pos_app/shared/widgets/app_card.dart";
 import "package:billing_pos_app/shared/widgets/status_badge.dart";
@@ -277,8 +278,87 @@ class SyncManagementScreen extends ConsumerWidget {
                 ),
               ),
             ),
+            const SizedBox(height: 16),
+
+            // Danger Zone: Database Reset
+            AppCard(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.delete_forever_rounded, color: AppColors.error, size: 22),
+                        SizedBox(width: 8),
+                        Text(
+                          "Local Data Management",
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.error),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      "Delete all local products, categories, customers, invoices, and dummy records. Resets the database to a completely clean state.",
+                      style: TextStyle(fontSize: 13, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 14),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.error),
+                      label: const Text("Delete All Local Data", style: TextStyle(color: AppColors.error, fontWeight: FontWeight.bold)),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: AppColors.error),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      ),
+                      onPressed: () => _confirmWipeData(context, ref),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _confirmWipeData(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: AppColors.error),
+            SizedBox(width: 8),
+            Text("Delete All Data?"),
+          ],
+        ),
+        content: const Text(
+          "This will permanently delete all local products, categories, customers, orders, and dummy records from this device.\n\nOnly the root Super Administrator profile will be kept for login.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error, foregroundColor: Colors.white),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final db = ref.read(appDatabaseProvider);
+              await db.wipeAllData();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("All local data deleted successfully. Fresh clean database ready!"),
+                    backgroundColor: AppColors.success,
+                  ),
+                );
+              }
+            },
+            child: const Text("Yes, Delete All"),
+          ),
+        ],
       ),
     );
   }

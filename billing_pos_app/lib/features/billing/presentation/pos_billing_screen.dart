@@ -477,7 +477,7 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      "Pooja POS",
+                      "PulsePOS",
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.dmSans(
@@ -629,7 +629,7 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
                     children: [
                       Flexible(
                         child: Text(
-                          "Pooja Sweets & Cafe",
+                          authState.user?.shopName ?? "PulsePOS Store",
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.dmSans(
                             fontWeight: FontWeight.w800,
@@ -1045,7 +1045,7 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
         // Product Catalog Grid
         Expanded(
           child: isLoading && products.isEmpty
-              ? const Center(child: AppLoader(message: "Loading Pooja Catalog..."))
+              ? const Center(child: AppLoader(message: "Loading Catalog..."))
               : products.isEmpty
                   ? Center(
                       child: Column(

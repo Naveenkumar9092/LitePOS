@@ -49,7 +49,16 @@ class AuthState {
 class AuthNotifier extends StateNotifier<AuthState> {
   final AuthRepository _repository;
 
-  AuthNotifier(this._repository) : super(const AuthState()) {
+  AuthNotifier(this._repository, [UserModel? initialUser])
+      : super(
+          initialUser != null
+              ? AuthState(
+                  isAuthenticated: true,
+                  user: initialUser,
+                  isOffline: true,
+                )
+              : const AuthState(),
+        ) {
     checkInitialAuth();
   }
 
@@ -90,7 +99,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
-    state = state.copyWith(isLoading: true);
     await _repository.logout();
     state = const AuthState();
   }
@@ -130,8 +138,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 }
 
+final initialUserProvider = Provider<UserModel?>((ref) => null);
+
 final authNotifierProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   final repo = ref.watch(authRepositoryProvider);
-  return AuthNotifier(repo);
+  final initialUser = ref.watch(initialUserProvider);
+  return AuthNotifier(repo, initialUser);
 });
 
