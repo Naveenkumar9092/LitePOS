@@ -69,8 +69,15 @@ class _ProductFormDialogState extends ConsumerState<ProductFormDialog> {
     final price = double.tryParse(_priceController.text.trim()) ?? 0.0;
     final tax = double.tryParse(_taxController.text.trim()) ?? 5.0;
 
+    final categories = ref.read(categoriesProvider).asData?.value ?? [];
+    final selectedCat = categories.cast<CategoryModel?>().firstWhere(
+      (c) => c?.id == _selectedCategoryId,
+      orElse: () => null,
+    );
+
     final data = {
       "categoryId": _selectedCategoryId,
+      "categoryName": selectedCat?.categoryName,
       "productName": _nameController.text.trim(),
       "description": _descController.text.trim().isEmpty ? null : _descController.text.trim(),
       "productImageStorageKey": _imageUrlController.text.trim().isEmpty ? null : _imageUrlController.text.trim(),
@@ -144,11 +151,16 @@ class _ProductFormDialogState extends ConsumerState<ProductFormDialog> {
                           loading: () => const LinearProgressIndicator(),
                           error: (_, __) => const Text("Failed to load categories"),
                           data: (categories) {
-                            if (_selectedCategoryId == null && categories.isNotEmpty) {
-                              _selectedCategoryId = categories.first.id;
+                            final exists = categories.any((c) => c.id == _selectedCategoryId);
+                            final effectiveId = exists
+                                ? _selectedCategoryId
+                                : (categories.isNotEmpty ? categories.first.id : null);
+                            if (_selectedCategoryId != effectiveId) {
+                              _selectedCategoryId = effectiveId;
                             }
+
                             return DropdownButtonFormField<int>(
-                              value: _selectedCategoryId,
+                              value: effectiveId,
                               decoration: const InputDecoration(
                                 border: OutlineInputBorder(),
                                 contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),

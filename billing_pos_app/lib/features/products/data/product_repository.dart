@@ -151,12 +151,28 @@ class ProductRepository {
     final maxId = (maxIdRow.first["maxId"] as num?)?.toInt() ?? 0;
     final newId = maxId > 0 ? maxId + 1 : (DateTime.now().millisecondsSinceEpoch % 100000);
 
+    final catId = (data["categoryId"] as num?)?.toInt() ?? 1;
+    String categoryName = data["categoryName"]?.toString() ?? "";
+    if (categoryName.isEmpty) {
+      try {
+        final catRows = await db.query(
+          DatabaseTables.localCategory,
+          where: "CategoryId = ?",
+          whereArgs: [catId],
+        );
+        if (catRows.isNotEmpty) {
+          categoryName = catRows.first["CategoryName"]?.toString() ?? "General";
+        }
+      } catch (_) {}
+    }
+    if (categoryName.isEmpty) categoryName = "General";
+
     final localProduct = ProductModel(
       id: newId,
       productGuid: "offline-$newId",
       companyId: (data["companyId"] as num?)?.toInt() ?? 1,
-      categoryId: (data["categoryId"] as num?)?.toInt() ?? 1,
-      categoryName: data["categoryName"]?.toString() ?? "General",
+      categoryId: catId,
+      categoryName: categoryName,
       productName: data["productName"]?.toString() ?? "New Product",
       description: data["description"]?.toString(),
       productImageStorageKey: data["productImageStorageKey"]?.toString(),
