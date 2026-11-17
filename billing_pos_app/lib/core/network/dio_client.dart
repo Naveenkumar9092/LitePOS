@@ -30,10 +30,10 @@ class DioClient {
     }).catchError((_) {});
   }
 
-  /// Returns true if the user is in an offline session or offline token is in use
+  /// Returns true if no authentication token is present
   Future<bool> get isOfflineMode async {
     final token = await _storageService.read(AppConstants.tokenKey);
-    return token == null || token.isEmpty || token.startsWith("offline-token");
+    return token == null || token.isEmpty;
   }
 
   void setBaseUrl(String newUrl) {

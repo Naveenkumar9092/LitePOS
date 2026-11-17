@@ -37,7 +37,6 @@ class HardwareRepository {
 
   Future<void> _syncRemotePrinters() async {
     try {
-      if (await _dioClient.isOfflineMode) return;
       final response = await _dioClient.get(ApiEndpoints.hardwarePrinters);
       if (response.success && response.data != null) {
         final list = (response.data as List)

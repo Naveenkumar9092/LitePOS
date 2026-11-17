@@ -71,8 +71,8 @@ class CompanyRepository {
 
     await _cacheProfileLocally(companyModel);
 
-    // 2. Cloud sync if online
-    if (!(await _dioClient.isOfflineMode)) {
+    // 2. Cloud sync in background
+    unawaited(() async {
       try {
         final response = await _dioClient.post<CompanyProfileModel>(
           ApiEndpoints.companySetup,
@@ -82,10 +82,9 @@ class CompanyRepository {
 
         if (response.data != null) {
           await _cacheProfileLocally(response.data!);
-          return response.data!;
         }
       } catch (_) {}
-    }
+    }());
 
     return companyModel;
   }
@@ -93,27 +92,24 @@ class CompanyRepository {
   Future<CompanyProfileModel> getProfile() async {
     // 1. FAST LOCAL-FIRST: Check local SQLite profile
     final local = await getLocalProfile();
+    unawaited(_syncRemoteProfile());
+
     if (local != null) {
-      if (!(await _dioClient.isOfflineMode)) {
-        unawaited(_syncRemoteProfile());
-      }
       return local;
     }
 
-    // 2. If SQLite was empty and online, fetch from remote
-    if (!(await _dioClient.isOfflineMode)) {
-      try {
-        final response = await _dioClient.get<CompanyProfileModel>(
-          ApiEndpoints.companyProfile,
-          fromJson: (data) => CompanyProfileModel.fromJson(data as Map<String, dynamic>),
-        ).timeout(const Duration(seconds: 3));
+    // 2. If SQLite was empty, fetch from remote
+    try {
+      final response = await _dioClient.get<CompanyProfileModel>(
+        ApiEndpoints.companyProfile,
+        fromJson: (data) => CompanyProfileModel.fromJson(data as Map<String, dynamic>),
+      ).timeout(const Duration(seconds: 3));
 
-        if (response.data != null) {
-          await _cacheProfileLocally(response.data!);
-          return response.data!;
-        }
-      } catch (_) {}
-    }
+      if (response.data != null) {
+        await _cacheProfileLocally(response.data!);
+        return response.data!;
+      }
+    } catch (_) {}
 
     // 3. Fallback default profile so UI never crashes
     final defaultCompany = CompanyProfileModel(
@@ -195,8 +191,8 @@ class CompanyRepository {
       }
     }
 
-    // 2. Cloud sync if online
-    if (!(await _dioClient.isOfflineMode)) {
+    // 2. Cloud sync in background
+    unawaited(() async {
       try {
         final response = await _dioClient.put<CompanyProfileModel>(
           ApiEndpoints.companyProfile,
@@ -206,12 +202,9 @@ class CompanyRepository {
 
         if (response.data != null) {
           await _cacheProfileLocally(response.data!);
-          return response.data!;
         }
-      } catch (_) {
-        // Offline / server error: local SQLite update already succeeded!
-      }
-    }
+      } catch (_) {}
+    }());
 
     final updated = await getLocalProfile();
     if (updated != null) {

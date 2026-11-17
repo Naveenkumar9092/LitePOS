@@ -21,7 +21,6 @@ class DashboardRepository {
 
   Future<void> _syncRemoteSAdmin() async {
     try {
-      if (await _dioClient.isOfflineMode) return;
       await _dioClient.get(ApiEndpoints.dashboardSAdmin);
     } catch (_) {}
   }
@@ -35,7 +34,6 @@ class DashboardRepository {
 
   Future<void> _syncRemoteAdmin({DateTime? date}) async {
     try {
-      if (await _dioClient.isOfflineMode) return;
       final queryParams = <String, dynamic>{};
       if (date != null) {
         queryParams["date"] = date.toIso8601String();
@@ -56,7 +54,6 @@ class DashboardRepository {
 
   Future<void> _syncRemoteCashier({int? cashierId, DateTime? date}) async {
     try {
-      if (await _dioClient.isOfflineMode) return;
       final queryParams = <String, dynamic>{};
       if (cashierId != null) queryParams["cashierId"] = cashierId;
       if (date != null) queryParams["date"] = date.toIso8601String();

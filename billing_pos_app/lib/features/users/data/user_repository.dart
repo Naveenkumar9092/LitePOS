@@ -93,7 +93,6 @@ class UserRepository {
     bool onlyCashiers = false,
   }) async {
     try {
-      if (await _dioClient.isOfflineMode) return;
       final remote = await _fetchRemoteUsers(
         pageNumber: pageNumber,
         pageSize: pageSize,
@@ -176,92 +175,91 @@ class UserRepository {
   }
 
   Future<UserModel> createUser(Map<String, dynamic> data) async {
-    try {
-      final response = await _dioClient.post<UserModel>(
-        ApiEndpoints.users,
-        data: data,
-        fromJson: (json) => UserModel.fromJson(json as Map<String, dynamic>),
-      );
+    // 1. FAST LOCAL-FIRST: Save in SQLite first (< 2ms)
+    final roleId = (data["roleId"] as num?)?.toInt() ?? 3;
+    final roleName = roleId == 1 ? "SAdmin" : (roleId == 2 ? "Admin" : "Cashier");
+    final newId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final localUser = UserModel(
+      id: newId,
+      companyId: (data["companyId"] as num?)?.toInt() ?? 1,
+      fullName: data["fullName"]?.toString() ?? "",
+      username: data["username"]?.toString() ?? "",
+      email: data["email"]?.toString(),
+      mobileNumber: data["mobileNumber"]?.toString(),
+      roleId: roleId,
+      roleName: roleName,
+      isActive: true,
+      createdAtUtc: DateTime.now(),
+    );
+    await _cacheUser(localUser);
 
-      if (response.success && response.data != null) {
-        await _cacheUser(response.data!);
-        return response.data!;
-      } else {
-        throw Exception(response.message);
-      }
-    } catch (e) {
-      // Local SQLite fallback when offline or cold start
-      final roleId = (data["roleId"] as num?)?.toInt() ?? 3;
-      final roleName = roleId == 1 ? "SAdmin" : (roleId == 2 ? "Admin" : "Cashier");
-      final newId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      final localUser = UserModel(
-        id: newId,
-        companyId: (data["companyId"] as num?)?.toInt() ?? 1,
-        fullName: data["fullName"]?.toString() ?? "",
-        username: data["username"]?.toString() ?? "",
-        email: data["email"]?.toString(),
-        mobileNumber: data["mobileNumber"]?.toString(),
-        roleId: roleId,
-        roleName: roleName,
-        isActive: true,
-        createdAtUtc: DateTime.now(),
-      );
-      await _cacheUser(localUser);
-      return localUser;
-    }
+    // 2. Next: sync with Online DB in background
+    unawaited(() async {
+      try {
+        final response = await _dioClient.post<UserModel>(
+          ApiEndpoints.users,
+          data: data,
+          fromJson: (json) => UserModel.fromJson(json as Map<String, dynamic>),
+        );
+        if (response.success && response.data != null) {
+          await _cacheUser(response.data!);
+        }
+      } catch (_) {}
+    }());
+
+    return localUser;
   }
 
   Future<UserModel> updateUser(int id, Map<String, dynamic> data) async {
-    try {
-      final response = await _dioClient.put<UserModel>(
-        "${ApiEndpoints.users}/$id",
-        data: data,
-        fromJson: (json) => UserModel.fromJson(json as Map<String, dynamic>),
-      );
-
-      if (response.success && response.data != null) {
-        await _cacheUser(response.data!);
-        return response.data!;
-      } else {
-        throw Exception(response.message);
-      }
-    } catch (e) {
-      // Local SQLite fallback
-      final db = await _db.database;
-      final updateData = <String, dynamic>{};
-      if (data.containsKey("fullName")) updateData["FullName"] = data["fullName"];
-      if (data.containsKey("email")) updateData["Email"] = data["email"];
-      if (data.containsKey("mobileNumber")) updateData["MobileNumber"] = data["mobileNumber"];
-      if (data.containsKey("roleId")) updateData["RoleId"] = data["roleId"];
-      if (updateData.isNotEmpty) {
-        await db.update(DatabaseTables.localUser, updateData, where: "UserId = ?", whereArgs: [id]);
-      }
-      final localList = await getLocalUsers();
-      return localList.firstWhere(
-        (u) => u.id == id,
-        orElse: () => UserModel.fromSqlite(Map<String, dynamic>.from(updateData)..["UserId"] = id),
-      );
+    // 1. FAST LOCAL-FIRST: Update local SQLite immediately
+    final db = await _db.database;
+    final updateData = <String, dynamic>{};
+    if (data.containsKey("fullName")) updateData["FullName"] = data["fullName"];
+    if (data.containsKey("email")) updateData["Email"] = data["email"];
+    if (data.containsKey("mobileNumber")) updateData["MobileNumber"] = data["mobileNumber"];
+    if (data.containsKey("roleId")) updateData["RoleId"] = data["roleId"];
+    if (data.containsKey("isActive")) updateData["IsActive"] = (data["isActive"] as bool) ? 1 : 0;
+    if (updateData.isNotEmpty) {
+      await db.update(DatabaseTables.localUser, updateData, where: "UserId = ?", whereArgs: [id]);
     }
+
+    // 2. Next: sync with Online DB in background
+    unawaited(() async {
+      try {
+        final response = await _dioClient.put<UserModel>(
+          "${ApiEndpoints.users}/$id",
+          data: data,
+          fromJson: (json) => UserModel.fromJson(json as Map<String, dynamic>),
+        );
+        if (response.success && response.data != null) {
+          await _cacheUser(response.data!);
+        }
+      } catch (_) {}
+    }());
+
+    final localList = await getLocalUsers();
+    return localList.firstWhere(
+      (u) => u.id == id,
+      orElse: () => UserModel.fromSqlite(Map<String, dynamic>.from(updateData)..["UserId"] = id),
+    );
   }
 
   Future<bool> updateUserStatus(int id, bool isActive) async {
-    try {
-      final response = await _dioClient.patch<bool>(
-        "${ApiEndpoints.users}/$id/status",
-        data: {"isActive": isActive},
-        fromJson: (json) => json as bool? ?? true,
-      );
-      if (response.success) {
-        final db = await _db.database;
-        await db.update(DatabaseTables.localUser, {"IsActive": isActive ? 1 : 0}, where: "UserId = ?", whereArgs: [id]);
-        return true;
-      }
-    } catch (_) {
-      final db = await _db.database;
-      await db.update(DatabaseTables.localUser, {"IsActive": isActive ? 1 : 0}, where: "UserId = ?", whereArgs: [id]);
-      return true;
-    }
-    return false;
+    // 1. FAST LOCAL-FIRST: Update SQLite immediately
+    final db = await _db.database;
+    await db.update(DatabaseTables.localUser, {"IsActive": isActive ? 1 : 0}, where: "UserId = ?", whereArgs: [id]);
+
+    // 2. Next: sync with Online DB in background
+    unawaited(() async {
+      try {
+        await _dioClient.patch(
+          "${ApiEndpoints.users}/$id/status",
+          data: {"isActive": isActive},
+        );
+      } catch (_) {}
+    }());
+
+    return true;
   }
 
   Future<List<RoleModel>> getRoles() async {
