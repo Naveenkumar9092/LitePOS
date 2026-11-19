@@ -21,6 +21,7 @@ import "package:billing_pos_app/shared/widgets/app_toast.dart";
 import "widgets/held_bills_dialog.dart";
 import "widgets/payment_dialog.dart";
 import "widgets/receipt_preview_dialog.dart";
+import "widgets/reprint_invoice_dialog.dart";
 
 class PosBillingScreen extends ConsumerStatefulWidget {
   const PosBillingScreen({super.key});
@@ -51,6 +52,13 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
     showDialog(
       context: context,
       builder: (_) => const HeldBillsDialog(),
+    );
+  }
+
+  void _openReprintDialog() {
+    showDialog(
+      context: context,
+      builder: (_) => const ReprintInvoiceDialog(),
     );
   }
 
@@ -525,6 +533,14 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
                 ),
               ),
               const SizedBox(width: 2),
+              IconButton(
+                icon: const Icon(Icons.print_outlined, size: 22, color: AppColors.primaryDark),
+                tooltip: "Reprint Bill",
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                onPressed: _openReprintDialog,
+              ),
+              const SizedBox(width: 2),
               Badge(
                 label: Text(
                   "${cartState.totalItemsCount}",
@@ -731,6 +747,21 @@ class _PosBillingScreenState extends ConsumerState<PosBillingScreen> {
                 ),
                 onPressed: _openHeldBillsDialog,
               ),
+            ),
+            const SizedBox(width: 8),
+
+            // Reprint Recent Bills Button
+            OutlinedButton.icon(
+              icon: const Icon(Icons.print_outlined, size: 17),
+              label: Text("Reprint", style: GoogleFonts.dmSans(fontWeight: FontWeight.bold, fontSize: 12)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.textPrimary,
+                side: const BorderSide(color: Color(0xFFCCE4E9)),
+                backgroundColor: const Color(0xFFF8FAFC),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: _openReprintDialog,
             ),
           ],
         ),

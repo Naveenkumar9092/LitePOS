@@ -407,6 +407,154 @@ class BillingRepository {
     return null;
   }
 
+  /// Fast offline-first query for recent completed invoices for Reprinting
+  Future<List<BillingInvoiceModel>> getRecentInvoices({
+    int limit = 30,
+    String? searchQuery,
+  }) async {
+    // 1. FAST LOCAL-FIRST: Read from local SQLite immediately (< 1ms)
+    final db = await _db.database;
+
+    String whereClause = "InvoiceStatus != 3"; // Exclude held bills
+    List<dynamic> whereArgs = [];
+
+    if (searchQuery != null && searchQuery.trim().isNotEmpty) {
+      final query = "%${searchQuery.trim()}%";
+      final matchedCustIds = <int>[];
+      try {
+        final custMatches = await db.query(
+          DatabaseTables.localCustomer,
+          columns: ["CustomerId"],
+          where: "CustomerName LIKE ? OR MobileNumber LIKE ?",
+          whereArgs: [query, query],
+        );
+        for (final c in custMatches) {
+          if (c["CustomerId"] != null) {
+            matchedCustIds.add((c["CustomerId"] as num).toInt());
+          }
+        }
+      } catch (_) {}
+
+      if (matchedCustIds.isNotEmpty) {
+        final inPlaceholders = List.filled(matchedCustIds.length, "?").join(",");
+        whereClause += " AND (InvoiceNumber LIKE ? OR CustomerId IN ($inPlaceholders))";
+        whereArgs.add(query);
+        whereArgs.addAll(matchedCustIds);
+      } else {
+        whereClause += " AND (InvoiceNumber LIKE ?)";
+        whereArgs.add(query);
+      }
+    }
+
+    final rows = await db.query(
+      DatabaseTables.localInvoice,
+      where: whereClause,
+      whereArgs: whereArgs.isNotEmpty ? whereArgs : null,
+      orderBy: "CreatedAtUTC DESC",
+      limit: limit,
+    );
+
+    final localResult = <BillingInvoiceModel>[];
+    for (final row in rows) {
+      final invId = (row["InvoiceId"] as num).toInt();
+      final itemRows = await db.query(
+        DatabaseTables.localInvoiceDetail,
+        where: "InvoiceId = ?",
+        whereArgs: [invId],
+      );
+      final items = itemRows.map((r) => BillingInvoiceItemModel.fromLocalDbMap(r)).toList();
+
+      final payRows = await db.query(
+        DatabaseTables.localPayment,
+        where: "InvoiceId = ?",
+        whereArgs: [invId],
+      );
+      final payments = payRows.map((r) => BillingPaymentModel.fromLocalDbMap(r)).toList();
+
+      String? customerName;
+      String? customerMobile;
+      final customerId = (row["CustomerId"] as num?)?.toInt();
+      if (customerId != null && customerId > 0) {
+        try {
+          final custRows = await db.query(
+            DatabaseTables.localCustomer,
+            where: "CustomerId = ?",
+            whereArgs: [customerId],
+            limit: 1,
+          );
+          if (custRows.isNotEmpty) {
+            customerName = custRows.first["CustomerName"]?.toString();
+            customerMobile = custRows.first["MobileNumber"]?.toString();
+          }
+        } catch (_) {}
+      }
+
+      localResult.add(BillingInvoiceModel.fromLocalDbMap(
+        row,
+        items: items,
+        payments: payments,
+        customerName: customerName,
+        customerMobile: customerMobile,
+      ));
+    }
+
+    // 2. Next: If online and local cache is empty, fetch immediately; otherwise sync/cache in background
+    if (localResult.isEmpty) {
+      try {
+        final response = await _dioClient.get(
+          ApiEndpoints.invoices,
+          queryParameters: {
+            "pageSize": limit,
+            if (searchQuery != null && searchQuery.isNotEmpty) "search": searchQuery,
+          },
+        );
+        if (response.success && response.data != null) {
+          final data = response.data;
+          List<dynamic> list = [];
+          if (data is Map<String, dynamic> && data["items"] != null) {
+            list = data["items"] as List<dynamic>;
+          } else if (data is List<dynamic>) {
+            list = data;
+          }
+          final remoteInvoices = <BillingInvoiceModel>[];
+          for (final item in list) {
+            final inv = BillingInvoiceModel.fromJson(item as Map<String, dynamic>);
+            await _cacheInvoiceLocally(inv);
+            remoteInvoices.add(inv);
+          }
+          return remoteInvoices;
+        }
+      } catch (_) {}
+    } else {
+      unawaited(() async {
+        try {
+          final response = await _dioClient.get(
+            ApiEndpoints.invoices,
+            queryParameters: {
+              "pageSize": limit,
+              if (searchQuery != null && searchQuery.isNotEmpty) "search": searchQuery,
+            },
+          );
+          if (response.success && response.data != null) {
+            final data = response.data;
+            List<dynamic> list = [];
+            if (data is Map<String, dynamic> && data["items"] != null) {
+              list = data["items"] as List<dynamic>;
+            } else if (data is List<dynamic>) {
+              list = data;
+            }
+            for (final item in list) {
+              final inv = BillingInvoiceModel.fromJson(item as Map<String, dynamic>);
+              await _cacheInvoiceLocally(inv);
+            }
+          }
+        } catch (_) {}
+      }());
+    }
+
+    return localResult;
+  }
+
   Future<void> _cacheInvoiceLocally(BillingInvoiceModel invoice) async {
     try {
       final db = await _db.database;

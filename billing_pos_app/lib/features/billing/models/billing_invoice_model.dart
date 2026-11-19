@@ -55,6 +55,7 @@ class BillingInvoiceItemModel {
 
   Map<String, dynamic> toLocalDbMap() {
     return {
+      if (invoiceDetailId > 0) "InvoiceDetailId": invoiceDetailId,
       "InvoiceId": invoiceId,
       "ProductId": productId,
       "ProductNameSnapshot": productNameSnapshot,
@@ -138,8 +139,10 @@ class BillingPaymentModel {
 
   Map<String, dynamic> toLocalDbMap() {
     return {
+      if (paymentId > 0) "PaymentId": paymentId,
+      "PaymentGuid": paymentGuid.isNotEmpty ? paymentGuid : "PAY-${DateTime.now().millisecondsSinceEpoch}",
       "InvoiceId": invoiceId,
-      "PaymentMode": paymentMode,
+      "PaymentModeId": paymentMode,
       "PaymentModeName": paymentModeName,
       "Amount": amount,
       "TransactionReference": transactionReference,
@@ -153,7 +156,7 @@ class BillingPaymentModel {
       paymentId: (map["PaymentId"] as num?)?.toInt() ?? 0,
       paymentGuid: map["PaymentGuid"]?.toString() ?? "",
       invoiceId: (map["InvoiceId"] as num).toInt(),
-      paymentMode: (map["PaymentMode"] as num?)?.toInt() ?? 1,
+      paymentMode: (map["PaymentModeId"] as num?)?.toInt() ?? (map["PaymentMode"] as num?)?.toInt() ?? 1,
       paymentModeName: map["PaymentModeName"]?.toString() ?? "Cash",
       amount: (map["Amount"] as num?)?.toDouble() ?? 0.0,
       transactionReference: map["TransactionReference"]?.toString(),
@@ -300,6 +303,8 @@ class BillingInvoiceModel {
 
   Map<String, dynamic> toLocalDbMap() {
     return {
+      if (invoiceId > 0) "InvoiceId": invoiceId,
+      "InvoiceGuid": invoiceGuid.isNotEmpty ? invoiceGuid : "INV-GUID-${invoiceNumber.isNotEmpty ? invoiceNumber : DateTime.now().millisecondsSinceEpoch}",
       "InvoiceNumber": invoiceNumber,
       "CompanyId": companyId,
       "ShopId": shopId,
@@ -325,6 +330,8 @@ class BillingInvoiceModel {
     Map<String, dynamic> map, {
     List<BillingInvoiceItemModel> items = const [],
     List<BillingPaymentModel> payments = const [],
+    String? customerName,
+    String? customerMobile,
   }) {
     return BillingInvoiceModel(
       invoiceId: (map["InvoiceId"] as num?)?.toInt() ?? 0,
@@ -335,6 +342,8 @@ class BillingInvoiceModel {
       shopId: (map["ShopId"] as num?)?.toInt() ?? 1,
       shopName: "Main Branch",
       customerId: (map["CustomerId"] as num?)?.toInt(),
+      customerName: customerName ?? map["CustomerName"]?.toString(),
+      customerMobile: customerMobile ?? map["CustomerMobile"]?.toString(),
       cashierId: (map["CashierId"] as num?)?.toInt() ?? 1,
       cashierName: "Cashier",
       deviceId: map["DeviceId"]?.toString() ?? "POS-TERMINAL-01",

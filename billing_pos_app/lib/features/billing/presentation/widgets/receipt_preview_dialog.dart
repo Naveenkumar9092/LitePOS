@@ -8,8 +8,13 @@ import "package:billing_pos_app/features/billing/models/billing_invoice_model.da
 
 class ReceiptPreviewDialog extends StatelessWidget {
   final BillingInvoiceModel invoice;
+  final bool isReprint;
 
-  const ReceiptPreviewDialog({super.key, required this.invoice});
+  const ReceiptPreviewDialog({
+    super.key,
+    required this.invoice,
+    this.isReprint = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -22,16 +27,20 @@ class ReceiptPreviewDialog extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Success Header
-              const CircleAvatar(
+              // Header
+              CircleAvatar(
                 radius: 28,
-                backgroundColor: AppColors.successContainer,
-                child: Icon(Icons.check, color: AppColors.success, size: 32),
+                backgroundColor: isReprint ? AppColors.primary.withValues(alpha: 0.15) : AppColors.successContainer,
+                child: Icon(
+                  isReprint ? Icons.print_rounded : Icons.check,
+                  color: isReprint ? AppColors.primary : AppColors.success,
+                  size: 30,
+                ),
               ),
               const SizedBox(height: 12),
-              const Text(
-                "Sale Completed Successfully!",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              Text(
+                isReprint ? "Reprint Invoice #${invoice.invoiceNumber}" : "Sale Completed Successfully!",
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
 
@@ -227,8 +236,8 @@ class ReceiptPreviewDialog extends StatelessWidget {
                   ),
 
                   AppButton(
-                    text: "New Sale",
-                    icon: Icons.add_shopping_cart,
+                    text: isReprint ? "Close" : "New Sale",
+                    icon: isReprint ? Icons.close_rounded : Icons.add_shopping_cart,
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
