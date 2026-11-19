@@ -19,24 +19,38 @@ public static class DependencyInjection
         AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
         var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL") ?? configuration["DATABASE_URL"];
-        var databaseProvider = configuration.GetValue<string>("DatabaseProvider");
-        var sqlServerConnection = configuration.GetConnectionString("DefaultConnection") 
-            ?? "Server=(localdb)\\MSSQLLocalDB;Database=LitePOS_BillingDb_Dev;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True";
+        var databaseProvider = Environment.GetEnvironmentVariable("DatabaseProvider") 
+            ?? configuration.GetValue<string>("DatabaseProvider") 
+            ?? "PostgreSql";
+
+        var defaultConn = configuration.GetConnectionString("DefaultConnection") 
+            ?? Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection") 
+            ?? "";
 
         var sqliteConnection = configuration.GetConnectionString("SqliteConnection")
+            ?? Environment.GetEnvironmentVariable("ConnectionStrings__SqliteConnection")
             ?? "Data Source=LitePOS_Local_Dev.db";
 
         var isPostgres = !string.IsNullOrEmpty(databaseUrl) ||
             string.Equals(databaseProvider, "PostgreSql", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(databaseProvider, "Postgres", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(databaseProvider, "Npgsql", StringComparison.OrdinalIgnoreCase);
+            string.Equals(databaseProvider, "Npgsql", StringComparison.OrdinalIgnoreCase) ||
+            defaultConn.Contains("Host=", StringComparison.OrdinalIgnoreCase) ||
+            defaultConn.Contains("supabase", StringComparison.OrdinalIgnoreCase) ||
+            defaultConn.StartsWith("postgres", StringComparison.OrdinalIgnoreCase);
 
-        if (isPostgres)
+        var rawPostgresConn = !string.IsNullOrEmpty(databaseUrl)
+            ? databaseUrl
+            : (!string.IsNullOrEmpty(defaultConn) ? defaultConn : (configuration.GetConnectionString("PostgresConnection") ?? ""));
+
+        var isPlaceholder = string.IsNullOrWhiteSpace(rawPostgresConn) ||
+            rawPostgresConn.Contains("your-project-ref", StringComparison.OrdinalIgnoreCase) ||
+            rawPostgresConn.Contains("YOUR_SUPABASE_PASSWORD", StringComparison.OrdinalIgnoreCase) ||
+            rawPostgresConn.Contains("Trusted_Connection", StringComparison.OrdinalIgnoreCase) ||
+            rawPostgresConn.Contains("MSSQLLocalDB", StringComparison.OrdinalIgnoreCase);
+
+        if (isPostgres && !isPlaceholder)
         {
-            var rawPostgresConn = !string.IsNullOrEmpty(databaseUrl)
-                ? databaseUrl
-                : (configuration.GetConnectionString("PostgresConnection") ?? configuration.GetConnectionString("DefaultConnection") ?? "");
-
             var parsedPostgresConn = ParsePostgresConnectionString(rawPostgresConn);
 
             services.AddDbContext<BillingPOSDbContext>(options =>
@@ -44,12 +58,12 @@ public static class DependencyInjection
                 {
                     npgsqlOptions.MigrationsAssembly(typeof(BillingPOSDbContext).Assembly.FullName);
                     npgsqlOptions.EnableRetryOnFailure(
-                        maxRetryCount: 3,
-                        maxRetryDelay: TimeSpan.FromSeconds(5),
+                        maxRetryCount: 5,
+                        maxRetryDelay: TimeSpan.FromSeconds(10),
                         errorCodesToAdd: null);
                 }));
         }
-        else if (string.Equals(databaseProvider, "Sqlite", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(databaseProvider, "Sqlite", StringComparison.OrdinalIgnoreCase) || isPlaceholder)
         {
             services.AddDbContext<BillingPOSDbContext>(options =>
                 options.UseSqlite(sqliteConnection));
@@ -57,7 +71,7 @@ public static class DependencyInjection
         else
         {
             services.AddDbContext<BillingPOSDbContext>(options =>
-                options.UseSqlServer(sqlServerConnection, sqlOptions =>
+                options.UseSqlServer(defaultConn, sqlOptions =>
                 {
                     sqlOptions.MigrationsAssembly(typeof(BillingPOSDbContext).Assembly.FullName);
                     sqlOptions.EnableRetryOnFailure(
@@ -90,6 +104,7 @@ public static class DependencyInjection
     {
         if (string.IsNullOrWhiteSpace(connectionOrUrl)) return connectionOrUrl;
 
+        // 1. URI format: postgresql://[user]:[password]@[host]:[port]/[database]
         if (connectionOrUrl.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) ||
             connectionOrUrl.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
         {
@@ -102,6 +117,7 @@ public static class DependencyInjection
                 var host = uri.Host;
                 var port = uri.Port > 0 ? uri.Port : 5432;
                 var database = uri.AbsolutePath.TrimStart('/');
+                if (string.IsNullOrEmpty(database)) database = "postgres";
 
                 var builder = new Npgsql.NpgsqlConnectionStringBuilder
                 {
@@ -110,7 +126,13 @@ public static class DependencyInjection
                     Database = database,
                     Username = username,
                     Password = password,
-                    SslMode = Npgsql.SslMode.Prefer
+                    SslMode = Npgsql.SslMode.Require,
+                    Pooling = true,
+                    MaxPoolSize = 50,
+                    MinPoolSize = 2,
+                    KeepAlive = 30,
+                    Timeout = 30,
+                    CommandTimeout = 30
                 };
 
                 return builder.ConnectionString;
@@ -121,7 +143,26 @@ public static class DependencyInjection
             }
         }
 
-        return connectionOrUrl;
+        // 2. Key-Value format: Host=...;Database=...;Username=...;Password=...
+        try
+        {
+            var builder = new Npgsql.NpgsqlConnectionStringBuilder(connectionOrUrl)
+            {
+                SslMode = Npgsql.SslMode.Require,
+                Pooling = true
+            };
+
+            if (builder.KeepAlive <= 0) builder.KeepAlive = 30;
+            if (builder.Timeout <= 0) builder.Timeout = 30;
+            if (builder.CommandTimeout <= 0) builder.CommandTimeout = 30;
+            if (builder.MaxPoolSize <= 0) builder.MaxPoolSize = 50;
+
+            return builder.ConnectionString;
+        }
+        catch
+        {
+            return connectionOrUrl;
+        }
     }
 }
 

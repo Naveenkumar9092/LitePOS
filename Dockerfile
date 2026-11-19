@@ -24,7 +24,7 @@ COPY --from=build /app/publish .
 ENV ASPNETCORE_ENVIRONMENT=Production
 ENV PORT=8080
 ENV EnableSwagger=true
-ENV DatabaseProvider=Sqlite
+ENV DatabaseProvider=PostgreSql
 ENV ConnectionStrings__SqliteConnection="Data Source=LitePOS_Cloud.db"
 
 # Expose Render standard container port

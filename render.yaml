@@ -11,9 +11,9 @@ services:
       - key: EnableSwagger
         value: "true"
       - key: DatabaseProvider
-        value: Sqlite
-      - key: ConnectionStrings__SqliteConnection
-        value: "Data Source=LitePOS_Cloud.db"
+        value: PostgreSql
+      - key: ConnectionStrings__DefaultConnection
+        sync: false
       - key: JwtSettings__Secret
         generateValue: true
       - key: JwtSettings__Issuer
