@@ -21,13 +21,15 @@ public class HealthCheckService : IHealthCheckService
     public async Task<HealthCheckDto> GetHealthStatusAsync(CancellationToken cancellationToken = default)
     {
         bool dbConnected = false;
+        string? dbError = null;
         try
         {
             dbConnected = await _dbContext.CanConnectAsync(cancellationToken);
         }
-        catch
+        catch (Exception ex)
         {
             dbConnected = false;
+            dbError = ex.Message;
         }
 
         var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Development";
@@ -39,7 +41,8 @@ public class HealthCheckService : IHealthCheckService
             Version = AppConstants.AppVersion,
             ServerTimeUtc = _dateTimeService.UtcNow,
             DatabaseConnected = dbConnected,
-            DatabaseProvider = _dbContext.ProviderName
+            DatabaseProvider = _dbContext.ProviderName,
+            DatabaseError = dbError
         };
     }
 }

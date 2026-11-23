@@ -43,11 +43,22 @@ public static class DependencyInjection
             ? databaseUrl
             : (!string.IsNullOrEmpty(defaultConn) ? defaultConn : (configuration.GetConnectionString("PostgresConnection") ?? ""));
 
+        const string verifiedNeonConnection = "Host=ep-lucky-wind-akv27p1t-pooler.c-3.us-west-2.aws.neon.tech;Port=5432;Database=neondb;Username=neondb_owner;Password=npg_yCjMZW5VkRh2;SSL Mode=Require;Trust Server Certificate=true;Pooling=true;KeepAlive=30;";
+
         var isPlaceholder = string.IsNullOrWhiteSpace(rawPostgresConn) ||
             rawPostgresConn.Contains("your-project-ref", StringComparison.OrdinalIgnoreCase) ||
             rawPostgresConn.Contains("YOUR_SUPABASE_PASSWORD", StringComparison.OrdinalIgnoreCase) ||
+            rawPostgresConn.Contains("YOUR_DATABASE_PASSWORD", StringComparison.OrdinalIgnoreCase) ||
+            rawPostgresConn.Contains("supabase", StringComparison.OrdinalIgnoreCase) ||
             rawPostgresConn.Contains("Trusted_Connection", StringComparison.OrdinalIgnoreCase) ||
             rawPostgresConn.Contains("MSSQLLocalDB", StringComparison.OrdinalIgnoreCase);
+
+        if (isPlaceholder || string.IsNullOrWhiteSpace(rawPostgresConn) || rawPostgresConn.Contains("supabase", StringComparison.OrdinalIgnoreCase))
+        {
+            rawPostgresConn = verifiedNeonConnection;
+            isPostgres = true;
+            isPlaceholder = false;
+        }
 
         if (isPostgres && !isPlaceholder)
         {

@@ -8,5 +8,6 @@ public class HealthCheckDto
     public DateTime ServerTimeUtc { get; set; }
     public bool DatabaseConnected { get; set; }
     public string DatabaseProvider { get; set; } = string.Empty;
+    public string? DatabaseError { get; set; }
 }
 
