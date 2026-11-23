@@ -65,6 +65,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> checkInitialAuth() async {
     final cached = await _repository.getCachedUser();
     if (cached != null) {
+      if (cached.isSAdmin) {
+        // Super Administrator strictly requires an active internet connection
+        final online = await _repository.isOnline();
+        if (!online) {
+          state = state.copyWith(
+            isAuthenticated: false,
+            user: null,
+            errorMessage: "Super Administrator requires an active internet connection.",
+          );
+          return;
+        }
+      }
       state = state.copyWith(
         isAuthenticated: true,
         user: cached,
@@ -80,13 +92,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
         password: password,
         forceOffline: forceOffline,
       );
-      final isOfflineSession = authResponse.accessToken.startsWith("offline-token");
       state = state.copyWith(
         isLoading: false,
         isAuthenticated: true,
         user: authResponse.user,
         permissions: authResponse.permissions,
-        isOffline: isOfflineSession,
+        isOffline: false,
       );
       return true;
     } catch (e) {

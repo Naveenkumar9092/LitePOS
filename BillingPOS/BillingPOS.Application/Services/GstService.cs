@@ -5,6 +5,7 @@ using BillingPOS.Domain.Enums;
 using BillingPOS.Domain.Interfaces;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
 namespace BillingPOS.Application.Services;
@@ -26,6 +27,18 @@ public class GstService : IGstService
     private readonly IValidator<UpdateGstConfigurationDto> _updateGstConfigValidator;
     private readonly IValidator<CreateCreditNoteDto> _createCreditNoteValidator;
     private readonly ILogger<GstService> _logger;
+    private readonly IMemoryCache? _cache;
+
+    private void InvalidateTaxCache()
+    {
+        _cache?.Remove("taxes_all");
+        _cache?.Remove("taxes_active");
+    }
+
+    private void InvalidateGstConfigCache()
+    {
+        _cache?.Remove("gst_configuration");
+    }
 
     public GstService(
         IRepository<Tax> taxRepository,
@@ -42,7 +55,8 @@ public class GstService : IGstService
         IValidator<CreateHsnSacDto> createHsnSacValidator,
         IValidator<UpdateGstConfigurationDto> updateGstConfigValidator,
         IValidator<CreateCreditNoteDto> createCreditNoteValidator,
-        ILogger<GstService> logger)
+        ILogger<GstService> logger,
+        IMemoryCache? cache = null)
     {
         _taxRepository = taxRepository;
         _hsnSacRepository = hsnSacRepository;
@@ -59,10 +73,17 @@ public class GstService : IGstService
         _updateGstConfigValidator = updateGstConfigValidator;
         _createCreditNoteValidator = createCreditNoteValidator;
         _logger = logger;
+        _cache = cache;
     }
 
     public async Task<List<TaxDto>> GetTaxesAsync(bool? activeOnly = null, CancellationToken cancellationToken = default)
     {
+        var cacheKey = activeOnly == true ? "taxes_active" : "taxes_all";
+        if (_cache != null && _cache.TryGetValue(cacheKey, out List<TaxDto>? cachedTaxes) && cachedTaxes != null)
+        {
+            return cachedTaxes;
+        }
+
         var query = _taxRepository.Query().Where(t => !t.IsDeleted);
         if (activeOnly.HasValue && activeOnly.Value)
         {
@@ -70,7 +91,7 @@ public class GstService : IGstService
         }
 
         var taxes = await query.OrderBy(t => t.RatePercentage).ToListAsync(cancellationToken);
-        return taxes.Select(t => new TaxDto(
+        var dtos = taxes.Select(t => new TaxDto(
             t.Id,
             t.TaxName,
             t.RatePercentage,
@@ -81,6 +102,17 @@ public class GstService : IGstService
             t.IsDefault,
             t.IsTaxInclusiveDefault
         )).ToList();
+
+        if (_cache != null)
+        {
+            _cache.Set(cacheKey, dtos, new MemoryCacheEntryOptions
+            {
+                SlidingExpiration = TimeSpan.FromMinutes(30),
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(2)
+            });
+        }
+
+        return dtos;
     }
 
     public async Task<TaxDto> CreateTaxAsync(CreateTaxDto dto, CancellationToken cancellationToken = default)
@@ -116,6 +148,7 @@ public class GstService : IGstService
 
         await _taxRepository.AddAsync(tax, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        InvalidateTaxCache();
 
         _logger.LogInformation("Tax rate {TaxName} ({Rate}%) created successfully", tax.TaxName, tax.RatePercentage);
 
@@ -157,6 +190,7 @@ public class GstService : IGstService
 
         _taxRepository.Update(tax);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        InvalidateTaxCache();
 
         return new TaxDto(tax.Id, tax.TaxName, tax.RatePercentage, tax.CgstPercentage, tax.SgstPercentage, tax.IgstPercentage, tax.IsActive, tax.IsDefault, tax.IsTaxInclusiveDefault);
     }
@@ -214,6 +248,11 @@ public class GstService : IGstService
 
     public async Task<GstConfigurationDto> GetGstConfigurationAsync(CancellationToken cancellationToken = default)
     {
+        if (_cache != null && _cache.TryGetValue("gst_configuration", out GstConfigurationDto? cachedConfig) && cachedConfig != null)
+        {
+            return cachedConfig;
+        }
+
         var config = await _gstConfigRepository.FirstOrDefaultAsync(c => !c.IsDeleted, cancellationToken);
         if (config == null)
         {
@@ -222,7 +261,7 @@ public class GstService : IGstService
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
-        return new GstConfigurationDto(
+        var dto = new GstConfigurationDto(
             config.Id,
             config.GSTIN,
             config.LegalName,
@@ -237,6 +276,17 @@ public class GstService : IGstService
             config.ShowHsnSummaryOnReceipt,
             config.ShowTaxBreakupOnReceipt
         );
+
+        if (_cache != null)
+        {
+            _cache.Set("gst_configuration", dto, new MemoryCacheEntryOptions
+            {
+                SlidingExpiration = TimeSpan.FromMinutes(30),
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(2)
+            });
+        }
+
+        return dto;
     }
 
     public async Task<GstConfigurationDto> UpdateGstConfigurationAsync(UpdateGstConfigurationDto dto, CancellationToken cancellationToken = default)
@@ -265,6 +315,7 @@ public class GstService : IGstService
 
         _gstConfigRepository.Update(config);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        InvalidateGstConfigCache();
 
         return new GstConfigurationDto(
             config.Id,

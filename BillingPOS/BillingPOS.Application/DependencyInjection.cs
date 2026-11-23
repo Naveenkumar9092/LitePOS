@@ -9,6 +9,7 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
+        services.AddMemoryCache();
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
         services.AddScoped<IHealthCheckService, HealthCheckService>();
         services.AddScoped<ICompanyService, CompanyService>();

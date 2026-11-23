@@ -1,14 +1,17 @@
 using Asp.Versioning;
+using BillingPOS.Api.Configuration;
 using BillingPOS.Application.DTOs;
 using BillingPOS.Application.Interfaces;
 using BillingPOS.Domain.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace BillingPOS.Api.Controllers;
 
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/auth")]
+[EnableRateLimiting(RateLimiterConfiguration.AuthPolicy)]
 public class AuthController : BaseApiController
 {
     private readonly IAuthService _authService;

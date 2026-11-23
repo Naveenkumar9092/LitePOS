@@ -4,6 +4,7 @@ using BillingPOS.Domain.Entities;
 using BillingPOS.Domain.Interfaces;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
 namespace BillingPOS.Application.Services;
@@ -18,6 +19,18 @@ public class CategoryService : ICategoryService
     private readonly IValidator<UpdateCategoryDto> _updateValidator;
     private readonly IValidator<UpdateCategorySortOrderDto> _sortOrderValidator;
     private readonly ILogger<CategoryService> _logger;
+    private readonly IMemoryCache? _cache;
+
+    private const string CacheKeyAll = "categories_all";
+    private const string CacheKeyActive = "categories_active";
+    private const string CacheKeyInactive = "categories_inactive";
+
+    private void InvalidateCache()
+    {
+        _cache?.Remove(CacheKeyAll);
+        _cache?.Remove(CacheKeyActive);
+        _cache?.Remove(CacheKeyInactive);
+    }
 
     public CategoryService(
         IRepository<Category> categoryRepository,
@@ -27,7 +40,8 @@ public class CategoryService : ICategoryService
         IValidator<CreateCategoryDto> createValidator,
         IValidator<UpdateCategoryDto> updateValidator,
         IValidator<UpdateCategorySortOrderDto> sortOrderValidator,
-        ILogger<CategoryService> logger)
+        ILogger<CategoryService> logger,
+        IMemoryCache? cache = null)
     {
         _categoryRepository = categoryRepository;
         _productRepository = productRepository;
@@ -37,12 +51,25 @@ public class CategoryService : ICategoryService
         _updateValidator = updateValidator;
         _sortOrderValidator = sortOrderValidator;
         _logger = logger;
+        _cache = cache;
     }
 
     public async Task<ApiResponse<List<CategoryDto>>> GetCategoriesAsync(bool? isActive = null, CancellationToken cancellationToken = default)
     {
         try
         {
+            var cacheKey = isActive switch
+            {
+                true => CacheKeyActive,
+                false => CacheKeyInactive,
+                null => CacheKeyAll
+            };
+
+            if (_cache != null && _cache.TryGetValue(cacheKey, out List<CategoryDto>? cachedList) && cachedList != null)
+            {
+                return ApiResponse<List<CategoryDto>>.SuccessResult(cachedList);
+            }
+
             var query = _categoryRepository.Query();
             if (isActive.HasValue)
             {
@@ -71,6 +98,15 @@ public class CategoryService : ICategoryService
                 c.CreatedAtUtc,
                 c.UpdatedAtUtc
             )).ToList();
+
+            if (_cache != null)
+            {
+                _cache.Set(cacheKey, dtos, new MemoryCacheEntryOptions
+                {
+                    SlidingExpiration = TimeSpan.FromMinutes(15),
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1)
+                });
+            }
 
             return ApiResponse<List<CategoryDto>>.SuccessResult(dtos);
         }
@@ -156,6 +192,7 @@ public class CategoryService : ICategoryService
 
             await _categoryRepository.AddAsync(category, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+            InvalidateCache();
 
             _logger.LogInformation("Category '{CategoryName}' (ID: {CategoryId}) created successfully.", category.CategoryName, category.Id);
 
@@ -216,6 +253,7 @@ public class CategoryService : ICategoryService
 
             _categoryRepository.Update(category);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+            InvalidateCache();
 
             var productCount = await _productRepository.Query()
                 .CountAsync(p => p.CategoryId == id, cancellationToken);
@@ -258,6 +296,7 @@ public class CategoryService : ICategoryService
 
             _categoryRepository.Update(category);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+            InvalidateCache();
 
             _logger.LogInformation("Category ID {CategoryId} status set to {Status}.", id, isActive ? "Active" : "Inactive");
             return ApiResponse<bool>.SuccessResult(true, $"Category {(isActive ? "activated" : "deactivated")} successfully.");
@@ -298,6 +337,7 @@ public class CategoryService : ICategoryService
             }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+            InvalidateCache();
 
             _logger.LogInformation("Updated display order for {Count} categories.", categories.Count);
             return ApiResponse<bool>.SuccessResult(true, "Category order updated successfully.");
@@ -329,6 +369,7 @@ public class CategoryService : ICategoryService
 
             _categoryRepository.Remove(category);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+            InvalidateCache();
 
             _logger.LogInformation("Category ID {CategoryId} deleted successfully.", id);
             return ApiResponse<bool>.SuccessResult(true, "Category deleted successfully.");

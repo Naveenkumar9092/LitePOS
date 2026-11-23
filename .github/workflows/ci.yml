@@ -1,0 +1,59 @@
+name: LitePOS CI Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend-test:
+    name: Backend Tests (.NET 10)
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Restore Dependencies
+      run: dotnet restore BillingPOS/BillingPOS.slnx
+
+    - name: Build Solution
+      run: dotnet build BillingPOS/BillingPOS.slnx --configuration Release --no-restore
+
+    - name: Run Backend Tests
+      run: dotnet test BillingPOS/BillingPOS.Tests/BillingPOS.Tests.csproj --configuration Release --no-build --verbosity normal
+
+  frontend-test:
+    name: Flutter Tests & Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup Flutter SDK
+      uses: subosito/flutter-action@v2
+      with:
+        channel: 'stable'
+        cache: true
+
+    - name: Install Dependencies
+      run: |
+        cd billing_pos_app
+        flutter pub get
+
+    - name: Dart Analyzer
+      run: |
+        cd billing_pos_app
+        dart analyze lib
+
+    - name: Run Flutter Tests
+      run: |
+        cd billing_pos_app
+        flutter test

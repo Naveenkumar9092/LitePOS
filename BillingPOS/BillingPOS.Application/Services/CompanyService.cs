@@ -4,6 +4,7 @@ using BillingPOS.Application.Interfaces;
 using BillingPOS.Domain.Entities;
 using BillingPOS.Domain.Interfaces;
 using FluentValidation;
+using Microsoft.Extensions.Caching.Memory;
 using ValidationException = BillingPOS.Application.Exceptions.ValidationException;
 
 namespace BillingPOS.Application.Services;
@@ -17,6 +18,16 @@ public class CompanyService : ICompanyService
     private readonly IValidator<CompanySetupRequestDto> _setupValidator;
     private readonly IValidator<UpdateCompanyProfileDto> _profileValidator;
     private readonly IValidator<UpdateShopConfigurationDto> _shopConfigValidator;
+    private readonly IMemoryCache? _cache;
+
+    private const string CacheKeyCompanyProfile = "company_profile";
+    private const string CacheKeyShopConfiguration = "shop_configuration";
+
+    private void InvalidateCompanyCache()
+    {
+        _cache?.Remove(CacheKeyCompanyProfile);
+        _cache?.Remove(CacheKeyShopConfiguration);
+    }
 
     public CompanyService(
         IRepository<Company> companyRepository,
@@ -25,7 +36,8 @@ public class CompanyService : ICompanyService
         ICurrentUserService currentUserService,
         IValidator<CompanySetupRequestDto> setupValidator,
         IValidator<UpdateCompanyProfileDto> profileValidator,
-        IValidator<UpdateShopConfigurationDto> shopConfigValidator)
+        IValidator<UpdateShopConfigurationDto> shopConfigValidator,
+        IMemoryCache? cache = null)
     {
         _companyRepository = companyRepository;
         _shopRepository = shopRepository;
@@ -34,6 +46,7 @@ public class CompanyService : ICompanyService
         _setupValidator = setupValidator;
         _profileValidator = profileValidator;
         _shopConfigValidator = shopConfigValidator;
+        _cache = cache;
     }
 
     public async Task<CompanyProfileDto> SetupCompanyAsync(CompanySetupRequestDto request, CancellationToken cancellationToken = default)
@@ -87,12 +100,18 @@ public class CompanyService : ICompanyService
 
         await _companyRepository.AddAsync(company, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        InvalidateCompanyCache();
 
         return MapToProfileDto(company, shop);
     }
 
     public async Task<CompanyProfileDto> GetCompanyProfileAsync(CancellationToken cancellationToken = default)
     {
+        if (_cache != null && _cache.TryGetValue(CacheKeyCompanyProfile, out CompanyProfileDto? cachedProfile) && cachedProfile != null)
+        {
+            return cachedProfile;
+        }
+
         Company? company = null;
         if (_currentUserService.CompanyId.HasValue && _currentUserService.CompanyId.Value > 0)
         {
@@ -106,8 +125,18 @@ public class CompanyService : ICompanyService
         }
 
         var shop = await _shopRepository.FirstOrDefaultAsync(s => s.CompanyId == company.Id && s.IsActive, cancellationToken);
+        var result = MapToProfileDto(company, shop);
 
-        return MapToProfileDto(company, shop);
+        if (_cache != null)
+        {
+            _cache.Set(CacheKeyCompanyProfile, result, new MemoryCacheEntryOptions
+            {
+                SlidingExpiration = TimeSpan.FromMinutes(30),
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(2)
+            });
+        }
+
+        return result;
     }
 
     public async Task<CompanyProfileDto> UpdateCompanyProfileAsync(UpdateCompanyProfileDto request, CancellationToken cancellationToken = default)
@@ -145,6 +174,7 @@ public class CompanyService : ICompanyService
 
         _companyRepository.Update(company);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        InvalidateCompanyCache();
 
         var shop = await _shopRepository.FirstOrDefaultAsync(s => s.CompanyId == company.Id && s.IsActive, cancellationToken);
         return MapToProfileDto(company, shop);
@@ -152,6 +182,11 @@ public class CompanyService : ICompanyService
 
     public async Task<ShopConfigurationDto> GetShopConfigurationAsync(CancellationToken cancellationToken = default)
     {
+        if (_cache != null && _cache.TryGetValue(CacheKeyShopConfiguration, out ShopConfigurationDto? cachedConfig) && cachedConfig != null)
+        {
+            return cachedConfig;
+        }
+
         Company? company = null;
         if (_currentUserService.CompanyId.HasValue && _currentUserService.CompanyId.Value > 0)
         {
@@ -170,7 +205,17 @@ public class CompanyService : ICompanyService
             throw new NotFoundException("Shop details not found.");
         }
 
-        return MapToShopConfigurationDto(company, shop);
+        var result = MapToShopConfigurationDto(company, shop);
+        if (_cache != null)
+        {
+            _cache.Set(CacheKeyShopConfiguration, result, new MemoryCacheEntryOptions
+            {
+                SlidingExpiration = TimeSpan.FromMinutes(30),
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(2)
+            });
+        }
+
+        return result;
     }
 
     public async Task<ShopConfigurationDto> UpdateShopConfigurationAsync(UpdateShopConfigurationDto request, CancellationToken cancellationToken = default)
@@ -219,6 +264,7 @@ public class CompanyService : ICompanyService
 
         _shopRepository.Update(shop);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        InvalidateCompanyCache();
 
         return MapToShopConfigurationDto(company, shop);
     }
@@ -266,6 +312,7 @@ public class CompanyService : ICompanyService
                         company.LogoStorageKey = pozoUrl;
                         _companyRepository.Update(company);
                         await _unitOfWork.SaveChangesAsync(cancellationToken);
+                        InvalidateCompanyCache();
                         return pozoUrl;
                     }
                 }
@@ -294,6 +341,7 @@ public class CompanyService : ICompanyService
         company.LogoStorageKey = storageKey;
         _companyRepository.Update(company);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        InvalidateCompanyCache();
 
         return storageKey;
     }

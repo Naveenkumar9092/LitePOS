@@ -25,74 +25,74 @@ class AuthRepository {
     String? deviceName,
     bool forceOffline = false,
   }) async {
-    // 1. If not forced offline, attempt online cloud authentication
-    if (!forceOffline) {
-      try {
-        final response = await _dioClient.post<AuthResponseModel>(
-          ApiEndpoints.login,
-          data: {
-            "username": username,
-            "password": password,
-            "deviceId": deviceId,
-            "deviceName": deviceName,
-          },
-          fromJson: (json) => AuthResponseModel.fromJson(json as Map<String, dynamic>),
-        ).timeout(const Duration(seconds: 3));
-
-        if (response.success && response.data != null) {
-          final authData = response.data!;
-          // Save tokens in secure storage & shared preferences
-          await _storageService.write(AppConstants.tokenKey, authData.accessToken);
-          await _storageService.write(AppConstants.refreshTokenKey, authData.refreshToken);
-          await _storageService.write("current_user_json", jsonEncode(authData.user.toJson()));
-          await _storageService.write("user_role", authData.user.roleName);
-
-          // First save in local SQLite for offline resilience!
-          await _cacheUserToSqlite(authData.user);
-          await _handleMultiCompanyIsolation(authData.user);
-
-          return authData;
-        }
-      } catch (_) {
-        // Fallback with standard seed credentials if online DB is reachable
-        final lower = username.trim().toLowerCase();
-        String? cloudFallbackPassword;
-        if (lower == "sadmin" && password != "SAdmin@123!") {
-          cloudFallbackPassword = "SAdmin@123!";
-        } else if (lower == "admin" && password != "Admin@123!") {
-          cloudFallbackPassword = "Admin@123!";
-        }
-
-        if (cloudFallbackPassword != null) {
-          try {
-            final cloudRes = await _dioClient.post<AuthResponseModel>(
-              ApiEndpoints.login,
-              data: {
-                "username": lower,
-                "password": cloudFallbackPassword,
-                "deviceId": deviceId,
-                "deviceName": deviceName,
-              },
-              fromJson: (json) => AuthResponseModel.fromJson(json as Map<String, dynamic>),
-            ).timeout(const Duration(seconds: 4));
-
-            if (cloudRes.success && cloudRes.data != null) {
-              final authData = cloudRes.data!;
-              await _storageService.write(AppConstants.tokenKey, authData.accessToken);
-              await _storageService.write(AppConstants.refreshTokenKey, authData.refreshToken);
-              await _storageService.write("current_user_json", jsonEncode(authData.user.toJson()));
-              await _storageService.write("user_role", authData.user.roleName);
-              await _cacheUserToSqlite(authData.user);
-              await _handleMultiCompanyIsolation(authData.user);
-              return authData;
-            }
-          } catch (_) {}
-        }
-      }
+    final cleanUsername = username.trim();
+    if (cleanUsername.isEmpty) {
+      throw Exception("Please enter username.");
+    }
+    if (password.trim().isEmpty) {
+      throw Exception("Please enter password.");
     }
 
-    // 2. Offline Local SQLite Login (Instant & Resilient)
-    return await _loginOffline(username: username, password: password);
+    final isSAdminAttempt = cleanUsername.toLowerCase() == "sadmin" ||
+        cleanUsername.toLowerCase() == "superadmin";
+
+    // Strict requirement: All logins must authenticate online with the cloud/backend API.
+    // Offline login fallback is strictly disabled for session creation.
+    try {
+      final response = await _dioClient.post<AuthResponseModel>(
+        ApiEndpoints.login,
+        data: {
+          "username": cleanUsername,
+          "password": password,
+          "deviceId": deviceId,
+          "deviceName": deviceName,
+        },
+        fromJson: (json) => AuthResponseModel.fromJson(json as Map<String, dynamic>),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.success && response.data != null) {
+        final authData = response.data!;
+        // Save tokens in secure storage & shared preferences
+        await _storageService.write(AppConstants.tokenKey, authData.accessToken);
+        await _storageService.write(AppConstants.refreshTokenKey, authData.refreshToken);
+        await _storageService.write("current_user_json", jsonEncode(authData.user.toJson()));
+        await _storageService.write("user_role", authData.user.roleName);
+
+        // Cache user to local SQLite for profile references
+        await _cacheUserToSqlite(authData.user);
+        await _handleMultiCompanyIsolation(authData.user);
+
+        return authData;
+      } else {
+        throw Exception(response.message ?? "Invalid username or password.");
+      }
+    } catch (e) {
+      final errorStr = e.toString();
+      if (errorStr.contains("Invalid username or password") ||
+          errorStr.contains("disabled") ||
+          errorStr.contains("Unauthorized") ||
+          errorStr.contains("locked") ||
+          errorStr.contains("credentials")) {
+        rethrow;
+      }
+
+      // Network / Connectivity failure:
+      if (isSAdminAttempt) {
+        throw Exception("Super Administrator requires an active internet connection to log in.");
+      } else {
+        throw Exception("An active internet connection is required to log in. Please connect to the internet.");
+      }
+    }
+  }
+
+  /// Checks whether the backend API is online and reachable
+  Future<bool> isOnline() async {
+    try {
+      final res = await _dioClient.get(ApiEndpoints.ping).timeout(const Duration(seconds: 4));
+      return res.success;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<AuthResponseModel> _loginOffline({
@@ -104,13 +104,17 @@ class AuthRepository {
       throw Exception("Please enter a username.");
     }
 
+    if (cleanUsername == "sadmin" || cleanUsername == "superadmin") {
+      throw Exception("Super Administrator is strictly prohibited from offline access.");
+    }
+
     // Ensure initial offline seed data exists in SQLite
     await OfflineDataSeeder.seedIfEmpty(_db);
 
     UserModel? matchedUser;
     List<String> permissions = [];
 
-    // 1. Check SQLite local user table first
+    // 1. Check SQLite local user table
     try {
       final db = await _db.database;
       final rows = await db.rawQuery("""
@@ -123,45 +127,21 @@ class AuthRepository {
 
       if (rows.isNotEmpty) {
         matchedUser = UserModel.fromSqlite(rows.first);
-        permissions = matchedUser.isSAdmin
+        if (matchedUser.isSAdmin) {
+          throw Exception("Super Administrator is strictly prohibited from offline access.");
+        }
+        permissions = matchedUser.isAdmin
             ? const [
-                "dashboard.view", "sadmin.access", "company.manage", "users.manage",
-                "roles.manage", "billing.create", "orders.view", "orders.manage",
-                "products.manage", "reports.view", "sync.manage", "hardware.manage",
+                "dashboard.view", "company.manage", "users.manage", "billing.create",
+                "orders.view", "orders.manage", "products.manage", "reports.view",
+                "hardware.manage", "sync.manage",
               ]
-            : (matchedUser.isAdmin
-                ? const [
-                    "dashboard.view", "company.manage", "users.manage", "billing.create",
-                    "orders.view", "orders.manage", "products.manage", "reports.view",
-                    "hardware.manage", "sync.manage",
-                  ]
-                : const [
-                    "dashboard.view", "billing.create", "orders.view", "pos.operate",
-                  ]);
+            : const [
+                "dashboard.view", "billing.create", "orders.view", "pos.operate",
+              ];
       }
-    } catch (_) {}
-
-    // 2. Root system fallback if localUser row was not found
-    if (matchedUser == null && (cleanUsername == "sadmin" || cleanUsername == "superadmin")) {
-      matchedUser = UserModel(
-        id: 1,
-        companyId: 0,
-        shopId: null,
-        fullName: "Super Administrator",
-        username: "sadmin",
-        email: "sadmin@litepos.com",
-        mobileNumber: "9876543210",
-        roleId: 1,
-        roleName: "SAdmin",
-        shopName: null,
-        isActive: true,
-        createdAtUtc: DateTime.now(),
-      );
-      permissions = const [
-        "dashboard.view", "sadmin.access", "company.manage", "users.manage",
-        "roles.manage", "billing.create", "orders.view", "orders.manage",
-        "products.manage", "reports.view", "sync.manage", "hardware.manage",
-      ];
+    } catch (e) {
+      if (e.toString().contains("Super Administrator")) rethrow;
     }
 
     if (matchedUser == null) {

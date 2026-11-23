@@ -1,13 +1,16 @@
+using BillingPOS.Api.Configuration;
 using BillingPOS.Application.DTOs;
 using BillingPOS.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace BillingPOS.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/sync")]
 [Authorize]
+[EnableRateLimiting(RateLimiterConfiguration.SyncPolicy)]
 public class SyncController : ControllerBase
 {
     private readonly ISyncService _syncService;

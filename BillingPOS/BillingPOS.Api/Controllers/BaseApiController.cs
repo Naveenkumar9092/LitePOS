@@ -1,12 +1,15 @@
 using Asp.Versioning;
+using BillingPOS.Api.Configuration;
 using BillingPOS.Application.DTOs;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace BillingPOS.Api.Controllers;
 
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/[controller]")]
+[EnableRateLimiting(RateLimiterConfiguration.GeneralPolicy)]
 public abstract class BaseApiController : ControllerBase
 {
     protected IActionResult OkResponse<T>(T data, string message = "Operation completed successfully")

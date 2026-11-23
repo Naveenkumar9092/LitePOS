@@ -54,28 +54,10 @@ class OfflineDataSeeder {
     await seedSystemRoot(db);
   }
 
-  /// Only seeds the root Super Administrator account so the system can be initialized
+  /// Super Administrator must strictly authenticate online only.
+  /// No offline root credentials are seeded locally.
   static Future<void> seedSystemRoot(Database db) async {
-    final sadminCount = Sqflite.firstIntValue(
-      await db.rawQuery("SELECT COUNT(*) FROM ${DatabaseTables.localUser} WHERE Username = 'sadmin'"),
-    );
-    if (sadminCount == null || sadminCount == 0) {
-      await db.insert(
-        DatabaseTables.localUser,
-        {
-          "UserId": 1,
-          "CompanyId": 0,
-          "FullName": "Super Administrator",
-          "Username": "sadmin",
-          "Email": "sadmin@litepos.com",
-          "MobileNumber": "9876543210",
-          "RoleId": 1,
-          "RoleName": "SAdmin",
-          "IsActive": 1,
-        },
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-    }
+    // SAdmin works strictly online. Local seeding disabled to prevent offline bypass.
   }
 
   /// Standard entry point: ensures legacy dummy data is purged and root sadmin is available

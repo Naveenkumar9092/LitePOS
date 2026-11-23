@@ -61,6 +61,7 @@ builder.Services.AddInfrastructureServices(builder.Configuration);
 builder.Services.AddCustomAuthentication(builder.Configuration);
 builder.Services.AddCustomApiVersioning();
 builder.Services.AddCustomSwagger();
+builder.Services.AddCustomRateLimiting();
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
@@ -83,9 +84,19 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// Configure Reverse Proxy Forwarded Headers (Render, Cloudflare, Nginx)
+var forwardedHeadersOptions = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto
+};
+forwardedHeadersOptions.KnownIPNetworks.Clear();
+forwardedHeadersOptions.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeadersOptions);
+
 // Configure the HTTP request pipeline
 app.UseMiddleware<GlobalExceptionMiddleware>();
 app.UseMiddleware<RequestLoggingMiddleware>();
+app.UseRateLimiter();
 
 var enableSwagger = app.Environment.IsDevelopment() 
     || app.Environment.IsEnvironment("Staging") 

@@ -13,20 +13,17 @@ class DashboardRepository {
   DashboardRepository(this._dioClient, this._db);
 
   Future<SAdminDashboardModel> getSAdminDashboard() async {
-    // 1. FAST LOCAL-FIRST: Load local metrics from SQLite (< 2ms)
-    final local = await _getLocalSAdminDashboard();
-
-    // 2. Fetch remote live metrics from server
+    // SAdmin works strictly online: fetch directly from server without offline fallback
     try {
-      final response = await _dioClient.get(ApiEndpoints.dashboardSAdmin);
+      final response = await _dioClient.get(ApiEndpoints.dashboardSAdmin).timeout(const Duration(seconds: 10));
       if (response.success && response.data != null) {
         return SAdminDashboardModel.fromJson(response.data as Map<String, dynamic>);
+      } else {
+        throw Exception(response.message ?? "Failed to retrieve Super Admin dashboard data.");
       }
     } catch (_) {
-      // Offline fallback: Return local SQLite numbers
+      throw Exception("Super Administrator requires an active internet connection. Please connect to the internet.");
     }
-
-    return local;
   }
 
   Future<AdminDashboardModel> getAdminDashboard({DateTime? date}) async {
