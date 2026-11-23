@@ -19,7 +19,7 @@ class DashboardRepository {
       if (response.success && response.data != null) {
         return SAdminDashboardModel.fromJson(response.data as Map<String, dynamic>);
       } else {
-        throw Exception(response.message ?? "Failed to retrieve Super Admin dashboard data.");
+        throw Exception(response.message.isNotEmpty ? response.message : "Failed to retrieve Super Admin dashboard data.");
       }
     } catch (_) {
       throw Exception("Super Administrator requires an active internet connection. Please connect to the internet.");
@@ -144,96 +144,6 @@ class DashboardRepository {
   }
 
   // --- Local SQLite Aggregation (Offline-First) ---
-
-  Future<SAdminDashboardModel> _getLocalSAdminDashboard() async {
-    try {
-      final db = await _db.database;
-      final shopRows = await db.query(DatabaseTables.localShop, limit: 1);
-      final companyRows = await db.query(DatabaseTables.localCompany, limit: 1);
-      final userCount = Sqflite.firstIntValue(
-            await db.rawQuery("SELECT COUNT(*) FROM ${DatabaseTables.localUser}"),
-          ) ??
-          0;
-      final activeUserCount = Sqflite.firstIntValue(
-            await db.rawQuery("SELECT COUNT(*) FROM ${DatabaseTables.localUser} WHERE IsActive = 1"),
-          ) ??
-          0;
-      final invoiceCount = Sqflite.firstIntValue(
-            await db.rawQuery("SELECT COUNT(*) FROM ${DatabaseTables.localInvoice}"),
-          ) ??
-          0;
-      final salesSumResult = await db.rawQuery(
-        "SELECT SUM(GrandTotal) as Total FROM ${DatabaseTables.localInvoice} WHERE InvoiceStatus != 3",
-      );
-      final totalSales = (salesSumResult.first["Total"] as num?)?.toDouble() ?? 0.0;
-      final pendingSync = Sqflite.firstIntValue(
-            await db.rawQuery("SELECT COUNT(*) FROM ${DatabaseTables.localSyncOutbox} WHERE SyncStatus = 1"),
-          ) ??
-          0;
-
-      final shopName = shopRows.isNotEmpty ? (shopRows.first["ShopName"] as String? ?? "Main Outlet") : "Main Outlet";
-      final companyName = companyRows.isNotEmpty ? (companyRows.first["CompanyName"] as String? ?? "PulsePOS Store") : "PulsePOS Store";
-
-      return SAdminDashboardModel(
-        shop: ShopInfoModel(
-          companyId: 1,
-          companyName: companyName,
-          shopId: 1,
-          shopName: shopName,
-          businessType: "Retail & Billing",
-          currencyCode: "INR",
-          contactNumber: "",
-          email: "",
-        ),
-        totalUsers: userCount,
-        activeUsers: activeUserCount,
-        registeredDevices: 1,
-        offlineDevices: 0,
-        syncFailures: 0,
-        totalInvoicesAllTime: invoiceCount,
-        totalSalesAllTime: totalSales,
-        appHealth: AppHealthModel(
-          status: "Healthy (Cloud Connected)",
-          databaseConnection: "Local DB Operational",
-          localDbStatus: "Operational",
-          pendingSyncRecords: pendingSync,
-          serverTimeUtc: DateTime.now().toUtc().toIso8601String(),
-        ),
-        recentAuditActivities: [
-          "Local-First SQLite Database Active",
-          "Background cloud sync engine initialized",
-        ],
-      );
-    } catch (_) {
-      return SAdminDashboardModel(
-        shop: ShopInfoModel(
-          companyId: 1,
-          companyName: "PulsePOS Store",
-          shopId: 1,
-          shopName: "Main Outlet",
-          businessType: "Retail & Billing",
-          currencyCode: "INR",
-          contactNumber: "",
-          email: "",
-        ),
-        totalUsers: 1,
-        activeUsers: 1,
-        registeredDevices: 1,
-        offlineDevices: 0,
-        syncFailures: 0,
-        totalInvoicesAllTime: 0,
-        totalSalesAllTime: 0.0,
-        appHealth: AppHealthModel(
-          status: "Offline",
-          databaseConnection: "Local DB Only",
-          localDbStatus: "Operational",
-          pendingSyncRecords: 0,
-          serverTimeUtc: DateTime.now().toUtc().toIso8601String(),
-        ),
-        recentAuditActivities: [],
-      );
-    }
-  }
 
   Future<AdminDashboardModel> _getLocalAdminDashboard({DateTime? date}) async {
     try {

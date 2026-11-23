@@ -48,10 +48,10 @@ jobs:
         cd billing_pos_app
         flutter pub get
 
-    - name: Dart Analyzer
+    - name: Flutter Analyzer
       run: |
         cd billing_pos_app
-        dart analyze lib
+        flutter analyze
 
     - name: Run Flutter Tests
       run: |

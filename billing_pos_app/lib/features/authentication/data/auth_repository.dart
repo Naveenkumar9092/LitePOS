@@ -5,7 +5,6 @@ import "../../../core/constants/api_endpoints.dart";
 import "../../../core/constants/app_constants.dart";
 import "../../../core/database/app_database.dart";
 import "../../../core/database/database_tables.dart";
-import "../../../core/database/offline_data_seeder.dart";
 import "../../../core/network/dio_client.dart";
 import "../../../core/storage/storage_service.dart";
 import "../models/auth_response_model.dart";
@@ -64,7 +63,7 @@ class AuthRepository {
 
         return authData;
       } else {
-        throw Exception(response.message ?? "Invalid username or password.");
+        throw Exception(response.message.isNotEmpty ? response.message : "Invalid username or password.");
       }
     } catch (e) {
       final errorStr = e.toString();
@@ -93,78 +92,6 @@ class AuthRepository {
     } catch (_) {
       return false;
     }
-  }
-
-  Future<AuthResponseModel> _loginOffline({
-    required String username,
-    required String password,
-  }) async {
-    final cleanUsername = username.trim().toLowerCase();
-    if (cleanUsername.isEmpty) {
-      throw Exception("Please enter a username.");
-    }
-
-    if (cleanUsername == "sadmin" || cleanUsername == "superadmin") {
-      throw Exception("Super Administrator is strictly prohibited from offline access.");
-    }
-
-    // Ensure initial offline seed data exists in SQLite
-    await OfflineDataSeeder.seedIfEmpty(_db);
-
-    UserModel? matchedUser;
-    List<String> permissions = [];
-
-    // 1. Check SQLite local user table
-    try {
-      final db = await _db.database;
-      final rows = await db.rawQuery("""
-        SELECT u.*, c.CompanyName 
-        FROM ${DatabaseTables.localUser} u
-        LEFT JOIN ${DatabaseTables.localCompany} c ON u.CompanyId = c.CompanyId
-        WHERE LOWER(u.Username) = ?
-        LIMIT 1
-      """, [cleanUsername]);
-
-      if (rows.isNotEmpty) {
-        matchedUser = UserModel.fromSqlite(rows.first);
-        if (matchedUser.isSAdmin) {
-          throw Exception("Super Administrator is strictly prohibited from offline access.");
-        }
-        permissions = matchedUser.isAdmin
-            ? const [
-                "dashboard.view", "company.manage", "users.manage", "billing.create",
-                "orders.view", "orders.manage", "products.manage", "reports.view",
-                "hardware.manage", "sync.manage",
-              ]
-            : const [
-                "dashboard.view", "billing.create", "orders.view", "pos.operate",
-              ];
-      }
-    } catch (e) {
-      if (e.toString().contains("Super Administrator")) rethrow;
-    }
-
-    if (matchedUser == null) {
-      throw Exception("User '$username' not found in local system. Please verify username.");
-    }
-
-    final offlineToken = "offline-token-${matchedUser.id}-${DateTime.now().millisecondsSinceEpoch}";
-    final offlineRefresh = "offline-refresh-${matchedUser.id}";
-
-    await _storageService.write(AppConstants.tokenKey, offlineToken);
-    await _storageService.write(AppConstants.refreshTokenKey, offlineRefresh);
-    await _storageService.write("current_user_json", jsonEncode(matchedUser.toJson()));
-    await _storageService.write("user_role", matchedUser.roleName);
-    await _cacheUserToSqlite(matchedUser);
-    await _handleMultiCompanyIsolation(matchedUser);
-
-    return AuthResponseModel(
-      accessToken: offlineToken,
-      refreshToken: offlineRefresh,
-      expiresAtUtc: DateTime.now().add(const Duration(days: 30)),
-      user: matchedUser,
-      permissions: permissions,
-    );
   }
 
   Future<AuthResponseModel?> refreshToken() async {
