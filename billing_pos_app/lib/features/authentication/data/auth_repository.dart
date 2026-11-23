@@ -6,6 +6,7 @@ import "../../../core/constants/app_constants.dart";
 import "../../../core/database/app_database.dart";
 import "../../../core/database/database_tables.dart";
 import "../../../core/network/dio_client.dart";
+import "../../../core/network/network_exceptions.dart";
 import "../../../core/storage/storage_service.dart";
 import "../models/auth_response_model.dart";
 import "../models/user_model.dart";
@@ -66,6 +67,14 @@ class AuthRepository {
         throw Exception(response.message.isNotEmpty ? response.message : "Invalid username or password.");
       }
     } catch (e) {
+      if (e is NetworkException) {
+        if (e.statusCode != null && e.statusCode! >= 400 && e.statusCode! < 500) {
+          throw Exception(e.message);
+        } else if (e.statusCode != null && e.statusCode! >= 500) {
+          throw Exception("Server Error (${e.statusCode}): ${e.message}");
+        }
+      }
+
       final errorStr = e.toString();
       if (errorStr.contains("Invalid username or password") ||
           errorStr.contains("disabled") ||

@@ -13,7 +13,7 @@ services:
       - key: DatabaseProvider
         value: PostgreSql
       - key: ConnectionStrings__DefaultConnection
-        sync: false
+        value: "Host=ep-lucky-wind-akv27p1t-pooler.c-3.us-west-2.aws.neon.tech;Port=5432;Database=neondb;Username=neondb_owner;Password=npg_yCjMZW5VkRh2;SSL Mode=Require;Trust Server Certificate=true;Pooling=true;KeepAlive=30;"
       - key: JwtSettings__Secret
         generateValue: true
       - key: JwtSettings__Issuer
