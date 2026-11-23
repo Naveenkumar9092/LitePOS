@@ -5,6 +5,7 @@ using BillingPOS.Domain.Entities;
 using BillingPOS.Domain.Interfaces;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using ValidationException = BillingPOS.Application.Exceptions.ValidationException;
 
 namespace BillingPOS.Application.Services;
@@ -24,6 +25,7 @@ public class AuthService : IAuthService
     private readonly IValidator<LoginRequestDto> _loginValidator;
     private readonly IValidator<ChangePasswordDto> _changePasswordValidator;
     private readonly IValidator<ForgotPasswordDto> _forgotPasswordValidator;
+    private readonly IMemoryCache? _memoryCache;
 
     public AuthService(
         IRepository<User> userRepository,
@@ -38,7 +40,8 @@ public class AuthService : IAuthService
         IJwtTokenService jwtTokenService,
         IValidator<LoginRequestDto> loginValidator,
         IValidator<ChangePasswordDto> changePasswordValidator,
-        IValidator<ForgotPasswordDto> forgotPasswordValidator)
+        IValidator<ForgotPasswordDto> forgotPasswordValidator,
+        IMemoryCache? memoryCache = null)
     {
         _userRepository = userRepository;
         _roleRepository = roleRepository;
@@ -53,6 +56,7 @@ public class AuthService : IAuthService
         _loginValidator = loginValidator;
         _changePasswordValidator = changePasswordValidator;
         _forgotPasswordValidator = forgotPasswordValidator;
+        _memoryCache = memoryCache;
     }
 
     public async Task<ApiResponse<LoginResponseDto>> LoginAsync(
@@ -69,8 +73,9 @@ public class AuthService : IAuthService
 
         var normalizedInput = request.Username.Trim();
 
-        // Find user by Username or Mobile number
+        // Find user by Username or Mobile number (AsNoTracking for instant read without change tracking overhead)
         var user = await _userRepository.Query()
+            .AsNoTracking()
             .Include(u => u.Role)
             .Include(u => u.Shop)
             .FirstOrDefaultAsync(u => 
@@ -94,11 +99,11 @@ public class AuthService : IAuthService
                 ["Your account has been deactivated. Please contact your system administrator."]);
         }
 
-        // Load permissions
-        var permissions = await GetPermissionsForRoleAsync(user.RoleId, cancellationToken);
+        // Load permissions (instantly from compile-time AppPermissions or memory cache)
+        var permissions = await GetPermissionsForRoleAsync(user.RoleId, user.Role?.Name, cancellationToken);
 
         // Generate Access and Refresh tokens
-        var (accessToken, expiresAtUtc) = _jwtTokenService.GenerateAccessToken(user, user.Role.Name, permissions);
+        var (accessToken, expiresAtUtc) = _jwtTokenService.GenerateAccessToken(user, user.Role?.Name ?? "User", permissions);
         var refreshToken = _jwtTokenService.GenerateRefreshToken(user.Id, ipAddress);
 
         await _refreshTokenRepository.AddAsync(refreshToken, cancellationToken);
@@ -133,7 +138,7 @@ public class AuthService : IAuthService
             user.Email,
             user.MobileNumber,
             user.RoleId,
-            user.Role.Name,
+            user.Role?.Name ?? "User",
             user.Shop?.ShopName,
             user.IsActive,
             user.CreatedAtUtc,
@@ -187,8 +192,8 @@ public class AuthService : IAuthService
 
         await _refreshTokenRepository.AddAsync(newRefreshToken, cancellationToken);
 
-        var permissions = await GetPermissionsForRoleAsync(user.RoleId, cancellationToken);
-        var (accessToken, expiresAtUtc) = _jwtTokenService.GenerateAccessToken(user, user.Role.Name, permissions);
+        var permissions = await GetPermissionsForRoleAsync(user.RoleId, user.Role?.Name, cancellationToken);
+        var (accessToken, expiresAtUtc) = _jwtTokenService.GenerateAccessToken(user, user.Role?.Name ?? "User", permissions);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -201,7 +206,7 @@ public class AuthService : IAuthService
             user.Email,
             user.MobileNumber,
             user.RoleId,
-            user.Role.Name,
+            user.Role?.Name ?? "User",
             user.Shop?.ShopName,
             user.IsActive,
             user.CreatedAtUtc,
@@ -292,23 +297,28 @@ public class AuthService : IAuthService
             "If an account with that username or email exists, reset instructions have been dispatched.");
     }
 
-    private async Task<List<string>> GetPermissionsForRoleAsync(int roleId, CancellationToken cancellationToken)
+    private async Task<List<string>> GetPermissionsForRoleAsync(int roleId, string? roleName = null, CancellationToken cancellationToken = default)
     {
-        var role = await _roleRepository.GetByIdAsync(roleId, cancellationToken);
-        if (role == null) return [];
-
-        if (role.Name == "SAdmin")
+        if (string.Equals(roleName, "SAdmin", StringComparison.OrdinalIgnoreCase))
         {
-            // SAdmin has all permissions
-            var all = await _permissionRepository.GetAllAsync(cancellationToken);
-            return all.Select(p => p.Code).ToList();
+            // SAdmin has all permissions - instant compile-time constants, 0 DB round trips
+            return AppPermissions.AllPermissions.Select(p => p.Code).ToList();
+        }
+
+        var cacheKey = $"role_perms_{roleId}";
+        if (_memoryCache != null && _memoryCache.TryGetValue(cacheKey, out List<string>? cachedPerms) && cachedPerms != null)
+        {
+            return cachedPerms;
         }
 
         var rolePermissions = await _rolePermissionRepository.Query()
+            .AsNoTracking()
             .Include(rp => rp.Permission)
             .Where(rp => rp.RoleId == roleId)
             .Select(rp => rp.Permission.Code)
             .ToListAsync(cancellationToken);
+
+        _memoryCache?.Set(cacheKey, rolePermissions, TimeSpan.FromMinutes(30));
 
         return rolePermissions;
     }

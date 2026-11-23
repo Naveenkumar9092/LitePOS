@@ -4,6 +4,7 @@ using BillingPOS.Domain.Entities;
 using BillingPOS.Domain.Enums;
 using BillingPOS.Domain.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace BillingPOS.Application.Services;
 
@@ -20,6 +21,7 @@ public class DashboardService : IDashboardService
     private readonly IRepository<LoginAuditLog> _auditLogRepository;
     private readonly ICurrentUserService _currentUserService;
     private readonly IDateTimeService _dateTimeService;
+    private readonly IMemoryCache? _memoryCache;
     private static readonly DateTime AppStartTimeUtc = DateTime.UtcNow;
 
     public DashboardService(
@@ -33,7 +35,8 @@ public class DashboardService : IDashboardService
         IRepository<Shop> shopRepository,
         IRepository<LoginAuditLog> auditLogRepository,
         ICurrentUserService currentUserService,
-        IDateTimeService dateTimeService)
+        IDateTimeService dateTimeService,
+        IMemoryCache? memoryCache = null)
     {
         _invoiceRepository = invoiceRepository;
         _paymentRepository = paymentRepository;
@@ -46,34 +49,53 @@ public class DashboardService : IDashboardService
         _auditLogRepository = auditLogRepository;
         _currentUserService = currentUserService;
         _dateTimeService = dateTimeService;
+        _memoryCache = memoryCache;
     }
 
     public async Task<ApiResponse<SAdminDashboardDto>> GetSAdminDashboardAsync(CancellationToken cancellationToken = default)
     {
+        const string cacheKey = "sadmin_dashboard_metrics";
+        if (_memoryCache != null && _memoryCache.TryGetValue(cacheKey, out SAdminDashboardDto? cachedDto) && cachedDto != null)
+        {
+            return ApiResponse<SAdminDashboardDto>.Ok(cachedDto);
+        }
+
         var now = _dateTimeService.UtcNow;
         var startOfToday = now.Date;
 
-        var company = await _companyRepository.FirstOrDefaultAsync(c => c.IsActive, cancellationToken);
-        var shop = await _shopRepository.FirstOrDefaultAsync(s => s.IsActive, cancellationToken);
+        // Static company & shop profile cached for 10 minutes
+        ShopInfoDto shopInfo;
+        const string shopCacheKey = "sadmin_shop_info";
+        if (_memoryCache != null && _memoryCache.TryGetValue(shopCacheKey, out ShopInfoDto? cachedShopInfo) && cachedShopInfo != null)
+        {
+            shopInfo = cachedShopInfo;
+        }
+        else
+        {
+            var company = await _companyRepository.Query().AsNoTracking().FirstOrDefaultAsync(c => c.IsActive, cancellationToken);
+            var shop = await _shopRepository.Query().AsNoTracking().FirstOrDefaultAsync(s => s.IsActive, cancellationToken);
 
-        var shopInfo = new ShopInfoDto(
-            CompanyName: company?.CompanyName ?? "LitePOS Enterprise",
-            ShopName: shop?.ShopName ?? "Main Cafe & Desserts Branch",
-            BusinessType: company?.BusinessType.ToString() ?? "Cafe",
-            GSTIN: company?.GSTIN ?? shop?.ContactNumber,
-            ContactNumber: shop?.ContactNumber ?? company?.MobileNumber ?? "9876543210",
-            City: shop?.City ?? "Chennai",
-            State: shop?.State ?? "Tamil Nadu"
-        );
+            shopInfo = new ShopInfoDto(
+                CompanyName: company?.CompanyName ?? "LitePOS Enterprise",
+                ShopName: shop?.ShopName ?? "Main Cafe & Desserts Branch",
+                BusinessType: company?.BusinessType.ToString() ?? "Cafe",
+                GSTIN: company?.GSTIN ?? shop?.ContactNumber,
+                ContactNumber: shop?.ContactNumber ?? company?.MobileNumber ?? "9876543210",
+                City: shop?.City ?? "Chennai",
+                State: shop?.State ?? "Tamil Nadu"
+            );
 
-        var totalUsers = await _userRepository.CountAsync(null, cancellationToken);
-        var activeUsers = await _userRepository.CountAsync(u => u.IsActive, cancellationToken);
+            _memoryCache?.Set(shopCacheKey, shopInfo, TimeSpan.FromMinutes(10));
+        }
 
-        var totalDevices = await _deviceRepository.CountAsync(null, cancellationToken);
-        var offlineDevices = await _deviceRepository.CountAsync(d => !d.IsOnline, cancellationToken);
-        var syncFailures = await _deviceRepository.Query().SumAsync(d => (int?)d.SyncFailuresCount, cancellationToken) ?? 0;
+        var totalUsers = await _userRepository.Query().AsNoTracking().CountAsync(cancellationToken);
+        var activeUsers = await _userRepository.Query().AsNoTracking().CountAsync(u => u.IsActive, cancellationToken);
 
-        var validInvoicesQuery = _invoiceRepository.Query().Where(i => i.InvoiceStatus != InvoiceStatus.Cancelled);
+        var totalDevices = await _deviceRepository.Query().AsNoTracking().CountAsync(cancellationToken);
+        var offlineDevices = await _deviceRepository.Query().AsNoTracking().CountAsync(d => !d.IsOnline, cancellationToken);
+        var syncFailures = await _deviceRepository.Query().AsNoTracking().SumAsync(d => (int?)d.SyncFailuresCount, cancellationToken) ?? 0;
+
+        var validInvoicesQuery = _invoiceRepository.Query().AsNoTracking().Where(i => i.InvoiceStatus != InvoiceStatus.Cancelled);
         var totalInvoices = await validInvoicesQuery.CountAsync(cancellationToken);
         var totalSales = await validInvoicesQuery.SumAsync(i => (decimal?)i.GrandTotal, cancellationToken) ?? 0m;
 
@@ -85,7 +107,7 @@ public class DashboardService : IDashboardService
         var uptimeString = $"{(int)uptime.TotalHours}h {uptime.Minutes}m";
         var appHealth = new AppHealthDto("Healthy", "SQL Server (Connected)", uptimeString, now);
 
-        var recentAuditLogs = await _auditLogRepository.Query()
+        var recentAuditLogs = await _auditLogRepository.Query().AsNoTracking()
             .OrderByDescending(a => a.AttemptedAtUtc)
             .Take(6)
             .Select(a => new LoginAuditLogDto(
@@ -115,6 +137,8 @@ public class DashboardService : IDashboardService
             recentAuditLogs
         );
 
+        _memoryCache?.Set(cacheKey, dto, TimeSpan.FromSeconds(5));
+
         return ApiResponse<SAdminDashboardDto>.Ok(dto);
     }
 
@@ -126,7 +150,14 @@ public class DashboardService : IDashboardService
         var nextDay = targetDate.AddDays(1);
         long? companyId = _currentUserService.CompanyId;
 
+        var cacheKey = $"admin_dashboard_{companyId}_{targetDate:yyyyMMdd}";
+        if (_memoryCache != null && _memoryCache.TryGetValue(cacheKey, out AdminDashboardDto? cachedDto) && cachedDto != null)
+        {
+            return ApiResponse<AdminDashboardDto>.Ok(cachedDto);
+        }
+
         var todayInvoicesQuery = _invoiceRepository.Query()
+            .AsNoTracking()
             .Where(i => (!companyId.HasValue || i.CompanyId == companyId.Value) && i.InvoiceDateUtc >= targetDate && i.InvoiceDateUtc < nextDay && i.InvoiceStatus != InvoiceStatus.Cancelled);
 
         var todayInvoices = await todayInvoicesQuery.CountAsync(cancellationToken);
@@ -245,6 +276,8 @@ public class DashboardService : IDashboardService
             recentInvoices
         );
 
+        _memoryCache?.Set(cacheKey, dto, TimeSpan.FromSeconds(5));
+
         return ApiResponse<AdminDashboardDto>.Ok(dto);
     }
 
@@ -254,13 +287,20 @@ public class DashboardService : IDashboardService
         CancellationToken cancellationToken = default)
     {
         var targetCashierId = cashierId ?? _currentUserService.UserId ?? 0;
-        var cashierUser = await _userRepository.GetByIdAsync(targetCashierId, cancellationToken);
-        var cashierName = cashierUser?.FullName ?? "Cashier Operator";
-
         var targetDate = (date ?? _dateTimeService.UtcNow).Date;
         var nextDay = targetDate.AddDays(1);
 
+        var cacheKey = $"cashier_dashboard_{targetCashierId}_{targetDate:yyyyMMdd}";
+        if (_memoryCache != null && _memoryCache.TryGetValue(cacheKey, out CashierDashboardDto? cachedDto) && cachedDto != null)
+        {
+            return ApiResponse<CashierDashboardDto>.Ok(cachedDto);
+        }
+
+        var cashierUser = await _userRepository.GetByIdAsync(targetCashierId, cancellationToken);
+        var cashierName = cashierUser?.FullName ?? "Cashier Operator";
+
         var cashierInvoicesQuery = _invoiceRepository.Query()
+            .AsNoTracking()
             .Where(i => i.CashierId == targetCashierId && i.InvoiceDateUtc >= targetDate && i.InvoiceDateUtc < nextDay && i.InvoiceStatus != InvoiceStatus.Cancelled);
 
         var todayInvoices = await cashierInvoicesQuery.CountAsync(cancellationToken);
@@ -331,6 +371,8 @@ public class DashboardService : IDashboardService
             recentTransactions,
             shiftSummary
         );
+
+        _memoryCache?.Set(cacheKey, dto, TimeSpan.FromSeconds(5));
 
         return ApiResponse<CashierDashboardDto>.Ok(dto);
     }

@@ -60,9 +60,11 @@ class SyncNotifier extends StateNotifier<SyncState> {
   }
 
   Future<void> init() async {
-    await registerOrGetDevice();
-    await checkPending();
-    await loadHistory();
+    await Future.wait([
+      registerOrGetDevice(),
+      checkPending(),
+      loadHistory(),
+    ]);
   }
 
   Future<void> registerOrGetDevice() async {

@@ -62,6 +62,10 @@ builder.Services.AddCustomAuthentication(builder.Configuration);
 builder.Services.AddCustomApiVersioning();
 builder.Services.AddCustomSwagger();
 builder.Services.AddCustomRateLimiting();
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+});
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
@@ -78,11 +82,14 @@ builder.Services.AddCors(options =>
         policy.AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials()
-              .SetIsOriginAllowed(_ => true);
+              .SetIsOriginAllowed(_ => true)
+              .SetPreflightMaxAge(TimeSpan.FromHours(24));
     });
 });
 
 var app = builder.Build();
+
+app.UseResponseCompression();
 
 // Configure Reverse Proxy Forwarded Headers (Render, Cloudflare, Nginx)
 var forwardedHeadersOptions = new ForwardedHeadersOptions
