@@ -96,7 +96,7 @@ class AuthRepository {
   /// Checks whether the backend API is online and reachable
   Future<bool> isOnline() async {
     try {
-      final res = await _dioClient.get(ApiEndpoints.ping).timeout(const Duration(seconds: 4));
+      final res = await _dioClient.get(ApiEndpoints.ping).timeout(const Duration(seconds: 8));
       return res.success;
     } catch (_) {
       return false;

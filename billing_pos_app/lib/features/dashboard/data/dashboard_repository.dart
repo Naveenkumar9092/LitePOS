@@ -15,13 +15,16 @@ class DashboardRepository {
   Future<SAdminDashboardModel> getSAdminDashboard() async {
     // SAdmin works strictly online: fetch directly from server without offline fallback
     try {
-      final response = await _dioClient.get(ApiEndpoints.dashboardSAdmin).timeout(const Duration(seconds: 10));
+      final response = await _dioClient.get(ApiEndpoints.dashboardSAdmin).timeout(const Duration(seconds: 20));
       if (response.success && response.data != null) {
         return SAdminDashboardModel.fromJson(response.data as Map<String, dynamic>);
       } else {
         throw Exception(response.message.isNotEmpty ? response.message : "Failed to retrieve Super Admin dashboard data.");
       }
-    } catch (_) {
+    } catch (e) {
+      if (e is TimeoutException) {
+        throw Exception("Server connection timed out. Please check your internet connection and try again.");
+      }
       throw Exception("Super Administrator requires an active internet connection. Please connect to the internet.");
     }
   }
