@@ -76,14 +76,14 @@ class _ReprintInvoiceDialogState extends ConsumerState<ReprintInvoiceDialog> {
 
   Future<void> _quickThermalPrint(BillingInvoiceModel invoice) async {
     try {
-      final receiptPdf = await SoftcopyService.instance.generateThermalReceiptPdf(invoice, is58mm: true);
+      final receiptPdf = await SoftcopyService.instance.generateThermalReceiptPdf(invoice, is58mm: false);
       if (mounted) {
         await SoftcopyService.instance.previewOrPrintPdf(
           context: context,
           pdfBytes: receiptPdf,
           title: "Receipt_${invoice.invoiceNumber}",
           fileName: "Receipt_${invoice.invoiceNumber}.pdf",
-          pageFormat: PdfPageFormat.roll57,
+          pageFormat: PdfPageFormat.roll80,
         );
       }
     } catch (e) {

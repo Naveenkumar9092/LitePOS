@@ -1,11 +1,15 @@
 import "package:flutter/material.dart";
+import "package:intl/intl.dart";
 import "package:billing_pos_app/core/theme/app_colors.dart";
 import "package:billing_pos_app/core/services/softcopy_service.dart";
 import "package:billing_pos_app/core/utilities/currency_formatter.dart";
-import "package:billing_pos_app/core/utilities/date_formatter.dart";
 import "package:billing_pos_app/shared/widgets/app_button.dart";
 import "package:billing_pos_app/features/billing/models/billing_invoice_model.dart";
+import "package:billing_pos_app/features/billing/services/thermal_receipt_html_builder.dart";
+import "package:billing_pos_app/features/billing/services/thermal_receipt_printer.dart";
 
+/// Production-ready dialog providing visual preview and printing for
+/// 3-inch (80mm) thermal receipts, browser HTML printing, and PDF softcopies.
 class ReceiptPreviewDialog extends StatelessWidget {
   final BillingInvoiceModel invoice;
   final bool isReprint;
@@ -16,161 +20,335 @@ class ReceiptPreviewDialog extends StatelessWidget {
     this.isReprint = false,
   });
 
+  bool get _isCustomerAvailable {
+    final rawCustomer = invoice.customerName?.trim() ?? "";
+    return rawCustomer.isNotEmpty &&
+        rawCustomer.toLowerCase() != "walk-in" &&
+        rawCustomer.toLowerCase() != "walk-in customer" &&
+        rawCustomer.toLowerCase() != "walk-in guest";
+  }
+
+  String get _combinedDateTime {
+    return DateFormat("dd-MM-yyyy hh:mm a").format(invoice.invoiceDateUtc.toLocal());
+  }
+
   @override
   Widget build(BuildContext context) {
+    final hasTax = invoice.taxAmount > 0;
+    final payments = invoice.payments;
+    final isSplitPayment = payments.length > 1;
+
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 480),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.all(22.0),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Header
+              // Header Icon & Title
               CircleAvatar(
-                radius: 28,
+                radius: 26,
                 backgroundColor: isReprint ? AppColors.primary.withValues(alpha: 0.15) : AppColors.successContainer,
                 child: Icon(
-                  isReprint ? Icons.print_rounded : Icons.check,
+                  isReprint ? Icons.print_rounded : Icons.check_circle_outline_rounded,
                   color: isReprint ? AppColors.primary : AppColors.success,
-                  size: 30,
+                  size: 28,
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               Text(
                 isReprint ? "Reprint Invoice #${invoice.invoiceNumber}" : "Sale Completed Successfully!",
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
 
-              // Thermal Receipt Card
+              // 80mm Thermal Receipt Preview Card
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade300),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade400, width: 1),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Shop Header
-                    Text(
-                      invoice.shopName,
-                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, letterSpacing: 0.5),
+                    // Brand Logo
+                    const Text(
+                      "LISTPOS",
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 2, color: Colors.black87),
                     ),
-                    const SizedBox(height: 2),
+                    const Text(
+                      "• SMART RETAIL POS •",
+                      style: TextStyle(fontSize: 8.5, letterSpacing: 0.8, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 4),
+
+                    // Shop Information
                     Text(
-                      invoice.companyName,
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                      invoice.shopName.isNotEmpty ? invoice.shopName : "ListPos Retail Store",
+                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 0.4),
+                      textAlign: TextAlign.center,
+                    ),
+                    if (invoice.companyName.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 1),
+                        child: Text(
+                          invoice.companyName,
+                          style: TextStyle(color: Colors.grey.shade700, fontSize: 11),
+                        ),
+                      ),
+                    const SizedBox(height: 6),
+
+                    // TAX INVOICE Header Box
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          top: BorderSide(color: Colors.grey.shade600, style: BorderStyle.solid),
+                          bottom: BorderSide(color: Colors.grey.shade600, style: BorderStyle.solid),
+                        ),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          "TAX INVOICE",
+                          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1),
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 8),
-                    const Divider(thickness: 1, height: 16),
 
-                    // Invoice Metadata
-                    _buildReceiptRow("Invoice No:", invoice.invoiceNumber),
-                    _buildReceiptRow("Date & Time:", DateFormatter.formatDateTime(invoice.invoiceDateUtc)),
-                    _buildReceiptRow("Cashier:", invoice.cashierName),
-                    _buildReceiptRow("POS Device:", invoice.deviceId),
-                    if (invoice.customerName != null) _buildReceiptRow("Customer:", invoice.customerName!),
-                    const Divider(thickness: 1, height: 16),
+                    // 2. Invoice Information (Strictly Combined Date & Time)
+                    _buildReceiptRow("Bill No:", invoice.invoiceNumber, isBold: true),
+                    _buildReceiptRow("Date:", _combinedDateTime),
+                    _buildReceiptRow("Cashier:", invoice.cashierName.isNotEmpty ? invoice.cashierName : "Counter"),
+                    if (invoice.deviceId.isNotEmpty) _buildReceiptRow("POS Node:", invoice.deviceId),
 
-                    // Items Table
+                    // 3. Customer Information (Strictly Conditional)
+                    if (_isCustomerAvailable) ...[
+                      const Divider(thickness: 0.8, height: 12),
+                      _buildReceiptRow("Customer:", invoice.customerName!.trim(), isBold: true),
+                      if (invoice.customerMobile != null && invoice.customerMobile!.trim().isNotEmpty)
+                        _buildReceiptRow("Mobile:", invoice.customerMobile!.trim()),
+                    ],
+
+                    const Divider(thickness: 1, height: 14),
+
+                    // 4. Product Items Table (5 Columns: #, Item, Qty, Rate, Amount)
                     const Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Expanded(child: Text("Item", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                        Text("Qty x Rate", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                        SizedBox(width: 16),
-                        Text("Total", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        SizedBox(width: 20, child: Text("#", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+                        Expanded(child: Text("Item", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+                        SizedBox(width: 34, child: Text("Qty", textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+                        SizedBox(width: 54, child: Text("Rate", textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+                        SizedBox(width: 64, child: Text("Amount", textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    ...invoice.items.map((it) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4.0),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  it.productNameSnapshot,
-                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                                ),
-                              ),
-                              Text(
-                                "${it.quantity} x ${CurrencyFormatter.formatINR(it.unitPrice)}",
-                                style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-                              ),
-                              const SizedBox(width: 16),
-                              Text(
-                                CurrencyFormatter.formatINR(it.lineTotal),
-                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                        )),
-                    const Divider(thickness: 1, height: 16),
+                    const Divider(thickness: 0.8, height: 10),
 
-                    // Totals
+                    // Items Rows
+                    ...invoice.items.asMap().entries.map((entry) {
+                      final idx = entry.key + 1;
+                      final it = entry.value;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2.5),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(width: 20, child: Text("$idx", style: const TextStyle(fontSize: 11.5))),
+                            Expanded(
+                              child: Text(
+                                it.productNameSnapshot,
+                                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                            SizedBox(width: 34, child: Text("${it.quantity}", textAlign: TextAlign.right, style: const TextStyle(fontSize: 11.5))),
+                            SizedBox(width: 54, child: Text(it.unitPrice.toStringAsFixed(2), textAlign: TextAlign.right, style: TextStyle(fontSize: 11.5, color: Colors.grey.shade700))),
+                            SizedBox(
+                              width: 64,
+                              child: Text(
+                                it.lineTotal.toStringAsFixed(2),
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+
+                    const Divider(thickness: 1, height: 14),
+
+                    // 5. Billing Summary
                     _buildReceiptRow("Subtotal:", CurrencyFormatter.formatINR(invoice.subTotal)),
                     if (invoice.discountAmount > 0)
                       _buildReceiptRow("Discount:", "-${CurrencyFormatter.formatINR(invoice.discountAmount)}"),
                     _buildReceiptRow("Taxable Amount:", CurrencyFormatter.formatINR(invoice.taxableAmount)),
-                    _buildReceiptRow("GST Tax:", CurrencyFormatter.formatINR(invoice.taxAmount)),
-                    const Divider(thickness: 1.5, height: 16),
+                    if (hasTax) ...[
+                      _buildReceiptRow("CGST:", CurrencyFormatter.formatINR(invoice.taxAmount / 2)),
+                      _buildReceiptRow("SGST:", CurrencyFormatter.formatINR(invoice.taxAmount / 2)),
+                    ],
+                    const Divider(thickness: 1.5, height: 14),
 
-                    // Grand Total
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text("GRAND TOTAL:", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
-                        Text(
-                          CurrencyFormatter.formatINR(invoice.grandTotal),
-                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: AppColors.primary),
-                        ),
-                      ],
+                    // Highlighted Grand Total
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text("GRAND TOTAL:", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14.5)),
+                          Text(
+                            CurrencyFormatter.formatINR(invoice.grandTotal),
+                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: AppColors.primary),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 6),
+                    const Divider(thickness: 1.5, height: 14),
+
+                    // 6. Payment Information
+                    if (isSplitPayment) ...[
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text("Split Payments:", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      ),
+                      ...payments.map((p) => _buildReceiptRow(" • ${p.paymentModeName}:", CurrencyFormatter.formatINR(p.amount))),
+                    ] else ...[
+                      _buildReceiptRow(
+                        "Payment Mode: ${payments.isNotEmpty ? payments.first.paymentModeName : 'Cash'}",
+                        "",
+                        isBold: true,
+                      ),
+                    ],
                     _buildReceiptRow("Paid Amount:", CurrencyFormatter.formatINR(invoice.paidAmount)),
                     if (invoice.balanceAmount > 0)
-                      _buildReceiptRow("Balance Due:", CurrencyFormatter.formatINR(invoice.balanceAmount)),
-                    const SizedBox(height: 12),
+                      _buildReceiptRow("Balance Due:", CurrencyFormatter.formatINR(invoice.balanceAmount), isRed: true),
 
-                    // Payment Mode Pill
+                    const SizedBox(height: 10),
+
+                    // 7. Dynamic Barcode
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        "Payment Mode: ${invoice.payments.isNotEmpty ? invoice.payments.first.paymentModeName : 'Cash'}",
-                        style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      child: Column(
+                        children: [
+                          Container(
+                            height: 28,
+                            width: 140,
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.black54, width: 0.5),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: List.generate(
+                                24,
+                                (i) => Container(
+                                  width: (i % 3 == 0) ? 3 : ((i % 2 == 0) ? 2 : 1),
+                                  color: Colors.black,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            "* ${invoice.invoiceNumber} *",
+                            style: const TextStyle(fontSize: 9.5, letterSpacing: 2, fontFamily: "monospace", fontWeight: FontWeight.bold),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 12),
+
+                    // 8. Receipt Footer
+                    const SizedBox(height: 6),
                     const Text(
-                      "*** THANK YOU! PLEASE VISIT AGAIN ***",
-                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 11, letterSpacing: 0.8),
+                      "Thank You!",
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                    ),
+                    const Text(
+                      "Visit Again!",
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      "Powered by ListPos",
+                      style: TextStyle(fontSize: 9, color: Colors.grey.shade600),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
 
-              // Actions
+              // Action Buttons
               Wrap(
-                spacing: 12,
+                spacing: 10,
                 runSpacing: 8,
                 alignment: WrapAlignment.center,
                 children: [
-                  // Softcopy PDF Preview & Print
+                  // 1. Primary 80mm Thermal Print (Standard 80mm Roll PDF / ESC-POS)
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.print_rounded, size: 18),
+                    label: const Text("Print Receipt"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () async {
+                      final receiptPdf = await SoftcopyService.instance.generateThermalReceiptPdf(
+                        invoice,
+                        is58mm: false,
+                      );
+                      if (context.mounted) {
+                        await SoftcopyService.instance.previewOrPrintPdf(
+                          context: context,
+                          pdfBytes: receiptPdf,
+                          title: "Receipt_${invoice.invoiceNumber}",
+                          fileName: "Receipt_${invoice.invoiceNumber}.pdf",
+                          pageFormat: PdfPageFormat.roll80,
+                        );
+                      }
+                    },
+                  ),
+
+                  // 2. Browser Direct HTML Print (Native window.print() via 80mm CSS template)
                   OutlinedButton.icon(
-                    icon: const Icon(Icons.picture_as_pdf_rounded, size: 18, color: AppColors.primary),
+                    icon: const Icon(Icons.language_rounded, size: 18, color: AppColors.primary),
+                    label: const Text("Browser Print (HTML)"),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () {
+                      final htmlContent = ThermalReceiptHtmlBuilder.build80mmReceiptHtml(
+                        invoice: invoice,
+                      );
+                      printThermalHtmlInBrowser(htmlContent);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("Sent 80mm HTML receipt to browser print engine."),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                  ),
+
+                  // 3. Invoice Softcopy PDF
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.picture_as_pdf_rounded, size: 18),
                     label: const Text("Invoice Softcopy (PDF)"),
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     onPressed: () async {
@@ -186,12 +364,12 @@ class ReceiptPreviewDialog extends StatelessWidget {
                     },
                   ),
 
-                  // Direct Softcopy Download / Save
+                  // 4. Save Softcopy (Download)
                   OutlinedButton.icon(
                     icon: const Icon(Icons.download_rounded, size: 18),
                     label: const Text("Save Softcopy"),
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     onPressed: () async {
@@ -211,30 +389,7 @@ class ReceiptPreviewDialog extends StatelessWidget {
                     },
                   ),
 
-                  // Thermal Print Receipt (58mm / 80mm Roll)
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.print_rounded, size: 18),
-                    label: const Text("Print Receipt"),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    onPressed: () async {
-                      final receiptPdf = await SoftcopyService.instance.generateThermalReceiptPdf(invoice, is58mm: true);
-                      if (context.mounted) {
-                        await SoftcopyService.instance.previewOrPrintPdf(
-                          context: context,
-                          pdfBytes: receiptPdf,
-                          title: "Receipt_${invoice.invoiceNumber}",
-                          fileName: "Receipt_${invoice.invoiceNumber}.pdf",
-                          pageFormat: PdfPageFormat.roll57,
-                        );
-                      }
-                    },
-                  ),
-
+                  // 5. Close / New Sale
                   AppButton(
                     text: isReprint ? "Close" : "New Sale",
                     icon: isReprint ? Icons.close_rounded : Icons.add_shopping_cart,
@@ -249,15 +404,33 @@ class ReceiptPreviewDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildReceiptRow(String label, String value) {
+  Widget _buildReceiptRow(String label, String value, {bool isBold = false, bool isRed = false}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2.0),
+      padding: const EdgeInsets.symmetric(vertical: 1.5),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Expanded(child: Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade700))),
-          const SizedBox(width: 8),
-          Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 11.5,
+                color: isRed ? Colors.red.shade800 : Colors.grey.shade800,
+                fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ),
+          if (value.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+                color: isRed ? Colors.red.shade800 : Colors.black87,
+              ),
+            ),
+          ],
         ],
       ),
     );

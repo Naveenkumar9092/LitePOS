@@ -162,6 +162,44 @@ class EscPosGenerator {
     return this;
   }
 
+  /// 5-Column table layout strictly formatted for 80mm (#, Item, Qty, Rate, Amount).
+  EscPosGenerator table5Col(String col1, String col2, String col3, String col4, String col5) {
+    final int wSno = columns == 32 ? 2 : 3;
+    final int wQty = columns == 32 ? 3 : 5;
+    final int wRate = columns == 32 ? 6 : 8;
+    final int wAmt = columns == 32 ? 7 : 10;
+    final int wItem = columns - wSno - wQty - wRate - wAmt;
+
+    final cSno = col1.padRight(wSno).substring(0, wSno);
+    final cItem = col2.padRight(wItem).substring(0, wItem);
+    final cQty = col3.padLeft(wQty).substring(0, wQty);
+    final cRate = col4.padLeft(wRate).substring(0, wRate);
+    final cAmt = col5.padLeft(wAmt).substring(0, wAmt);
+
+    textLine("$cSno$cItem$cQty$cRate$cAmt");
+    return this;
+  }
+
+  /// ESC/POS Standard 1D Barcode (Code 128 Subset B).
+  EscPosGenerator barcode(String data, {int height = 50, int width = 2}) {
+    if (data.isEmpty) return this;
+    center();
+    // GS h <height>: Set barcode height (1-255)
+    _builder.add(Uint8List.fromList([gs, 0x68, height.clamp(1, 255)]));
+    // GS w <width>: Set module width (1-6)
+    _builder.add(Uint8List.fromList([gs, 0x77, width.clamp(1, 6)]));
+    // GS H 2: Print HRI characters below the barcode
+    _builder.add(Uint8List.fromList([gs, 0x48, 0x02]));
+    // GS k 73: Format B Code 128 ({B + text)
+    final code128Text = "{B$data";
+    final dataBytes = latin1.encode(code128Text);
+    _builder.add(Uint8List.fromList([gs, 0x6B, 73, dataBytes.length]));
+    _builder.add(dataBytes);
+    feed(1);
+    left();
+    return this;
+  }
+
   /// Generates a standard Model 2 ESC/POS QR Code byte command sequence.
   EscPosGenerator qrCode(String data, {int size = 5}) {
     final dataBytes = utf8.encode(data);
@@ -322,7 +360,7 @@ class EscPosGenerator {
     return gen.toBytes();
   }
 
-  /// Builds a customer retail invoice thermal receipt.
+  /// Builds a customer retail invoice thermal receipt matching the 80mm thermal design specifications.
   static Uint8List buildInvoiceReceipt({
     required PrinterConfigurationModel config,
     required String shopName,
@@ -338,76 +376,134 @@ class EscPosGenerator {
     required String paymentMode,
     String? upiId,
     String? footerNote,
+    DateTime? invoiceDateUtc,
+    double? paidAmount,
+    double? balanceAmount,
+    String? shopAddress,
+    String? shopContact,
+    String? gstin,
+    bool isIgst = false,
+    String brandName = "ListPos",
   }) {
     final gen = EscPosGenerator.fromModel(config);
 
-    // Header
+    // 1. Header: ListPos Branding & Shop Details
     gen.center();
+    gen.textLine(brandName.toUpperCase(), bold: true);
     gen.textLine(shopName, bold: true, doubleSize: true);
+    if (shopAddress != null && shopAddress.isNotEmpty) {
+      gen.textLine(shopAddress);
+    }
+    if (shopContact != null && shopContact.isNotEmpty) {
+      gen.textLine("Phone: $shopContact");
+    }
+    if (gstin != null && gstin.isNotEmpty) {
+      gen.textLine("GSTIN: $gstin", bold: true);
+    }
     if (config.headerCustomText != null && config.headerCustomText!.isNotEmpty) {
       gen.textLine(config.headerCustomText!);
     }
-    gen.feed(1);
+    gen.divider("=");
+    gen.textLine("TAX INVOICE", bold: true);
+    gen.divider("-");
+
+    // 2. Invoice Metadata (Strict requirement: Combined Date & Time into ONE field)
     gen.left();
+    final dt = (invoiceDateUtc ?? DateTime.now()).toLocal();
+    final day = dt.day.toString().padLeft(2, "0");
+    final month = dt.month.toString().padLeft(2, "0");
+    final year = dt.year.toString();
+    final hour = dt.hour == 0 ? 12 : (dt.hour > 12 ? dt.hour - 12 : dt.hour);
+    final minute = dt.minute.toString().padLeft(2, "0");
+    final ampm = dt.hour >= 12 ? "PM" : "AM";
+    final formattedDateTime = "$day-$month-$year ${hour.toString().padLeft(2, '0')}:$minute $ampm";
 
-    final now = DateTime.now();
-    final dateStr = "${now.day.toString().padLeft(2, '0')}-${now.month.toString().padLeft(2, '0')}-${now.year} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
-    gen.row("Invoice #: $invoiceNumber", dateStr);
-    gen.row("Cashier: $cashierName", "Mode: $paymentMode");
-    if (customerMobile.isNotEmpty) {
-      gen.row("Customer: $customerName", customerMobile);
+    gen.row("Bill No: $invoiceNumber", "Date: $formattedDateTime");
+    gen.row("Cashier: ${cashierName.isNotEmpty ? cashierName : 'Counter'}", "");
+
+    // 3. Customer Information (Conditional: only when available, no walk-in placeholders)
+    final cleanCustomer = customerName.trim();
+    final isCustomerAvailable = cleanCustomer.isNotEmpty &&
+        cleanCustomer.toLowerCase() != "walk-in" &&
+        cleanCustomer.toLowerCase() != "walk-in customer" &&
+        cleanCustomer.toLowerCase() != "walk-in guest";
+
+    if (isCustomerAvailable) {
+      gen.divider("-");
+      gen.row("Customer: $cleanCustomer", customerMobile.isNotEmpty ? "Ph: $customerMobile" : "");
     }
     gen.divider("-");
 
-    // Items Table
-    if (config.paperSize == PrinterPaperSize.mm58) {
-      gen.table3Col("Item", "Qty", "Amount");
-      gen.divider("-");
-      for (final it in items) {
-        final name = (it["productName"] as String? ?? "Item");
-        final qty = (it["quantity"] as num?)?.toInt() ?? 1;
-        final total = (it["lineTotal"] as num?)?.toDouble() ?? 0.0;
-        final truncatedName = name.length > 14 ? name.substring(0, 14) : name;
-        gen.table3Col(truncatedName, qty.toString(), total.toStringAsFixed(2));
-      }
-    } else {
-      gen.table4Col("Item", "Qty", "Rate", "Amount");
-      gen.divider("-");
-      for (final it in items) {
-        final name = (it["productName"] as String? ?? "Item");
-        final qty = (it["quantity"] as num?)?.toInt() ?? 1;
-        final rate = (it["unitPrice"] as num?)?.toDouble() ?? 0.0;
-        final total = (it["lineTotal"] as num?)?.toDouble() ?? 0.0;
-        gen.table4Col(name, qty.toString(), rate.toStringAsFixed(2), total.toStringAsFixed(2));
-      }
+    // 4. Product Items Table (5 Columns: #, Item, Qty, Rate, Amount)
+    gen.table5Col("#", "Item", "Qty", "Rate", "Amount");
+    gen.divider("-");
+
+    int itemIdx = 1;
+    for (final it in items) {
+      final name = (it["productName"] as String? ?? it["productNameSnapshot"] as String? ?? "Item");
+      final qty = (it["quantity"] as num?)?.toInt() ?? 1;
+      final rate = (it["unitPrice"] as num?)?.toDouble() ?? 0.0;
+      final total = (it["lineTotal"] as num?)?.toDouble() ?? 0.0;
+
+      gen.table5Col(
+        "$itemIdx",
+        name,
+        qty.toString(),
+        rate.toStringAsFixed(2),
+        total.toStringAsFixed(2),
+      );
+      itemIdx++;
     }
 
+    // 5. Billing Summary
     gen.divider("-");
-    gen.row("Sub Total:", "Rs. ${subTotal.toStringAsFixed(2)}");
+    gen.row("Subtotal:", "Rs. ${subTotal.toStringAsFixed(2)}");
     if (discountAmount > 0) {
       gen.row("Discount:", "-Rs. ${discountAmount.toStringAsFixed(2)}");
     }
+    final taxable = (subTotal - discountAmount).clamp(0.0, double.infinity);
+    gen.row("Taxable Amount:", "Rs. ${taxable.toStringAsFixed(2)}");
+
     if (taxAmount > 0) {
-      gen.row("GST Tax:", "Rs. ${taxAmount.toStringAsFixed(2)}");
+      if (isIgst) {
+        gen.row("IGST:", "Rs. ${taxAmount.toStringAsFixed(2)}");
+      } else {
+        final halfTax = taxAmount / 2;
+        gen.row("CGST:", "Rs. ${halfTax.toStringAsFixed(2)}");
+        gen.row("SGST:", "Rs. ${halfTax.toStringAsFixed(2)}");
+      }
     }
+
     gen.divider("=");
-    gen.row("GRAND TOTAL:", "Rs. ${grandTotal.toStringAsFixed(2)}");
+    gen.textLine("GRAND TOTAL:  Rs. ${grandTotal.toStringAsFixed(2)}", bold: true, doubleSize: true);
     gen.divider("=");
 
-    // Dynamic UPI QR Code
+    // 6. Payment Information
+    final effectivePaid = paidAmount ?? grandTotal;
+    gen.row("Payment Mode: $paymentMode", "Paid: Rs. ${effectivePaid.toStringAsFixed(2)}");
+    if (balanceAmount != null && balanceAmount > 0) {
+      gen.row("Balance Due:", "Rs. ${balanceAmount.toStringAsFixed(2)}");
+    }
+
+    // 7. Dynamic Barcode
+    gen.feed(1);
+    gen.barcode(invoiceNumber);
+
+    // Dynamic UPI QR Code (Only if configured and available)
     if (config.printQrCode && upiId != null && upiId.isNotEmpty && grandTotal > 0) {
       gen.feed(1);
       gen.upiPaymentQr(upiId: upiId, amount: grandTotal, merchantName: shopName);
     }
 
-    // Footer
+    // 8. Receipt Footer
+    gen.feed(1);
     gen.center();
+    gen.textLine("Thank You!", bold: true);
+    gen.textLine("Visit Again!", bold: true);
     if (footerNote != null && footerNote.isNotEmpty) {
       gen.textLine(footerNote);
     } else if (config.footerCustomText != null && config.footerCustomText!.isNotEmpty) {
       gen.textLine(config.footerCustomText!);
-    } else {
-      gen.textLine("Thank You! Visit Again", bold: true);
     }
     gen.feed(2);
 
